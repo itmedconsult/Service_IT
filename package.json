@@ -1,0 +1,29 @@
+{
+  "name": "doctorease-price-control",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "ng serve",
+    "build": "ng build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@angular/animations": "latest",
+    "@angular/common": "latest",
+    "@angular/compiler": "latest",
+    "@angular/core": "latest",
+    "@angular/forms": "latest",
+    "@angular/platform-browser": "latest",
+    "@angular/router": "latest",
+    "rxjs": "latest",
+    "tslib": "latest",
+    "zone.js": "latest"
+  },
+  "devDependencies": {
+    "@angular/build": "latest",
+    "@angular/cli": "latest",
+    "typescript": "latest",
+    "vitest": "^4.1.11"
+  }
+}

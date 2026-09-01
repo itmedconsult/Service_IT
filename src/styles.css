@@ -1,0 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
+
+:root {
+  font-family: 'DM Sans', 'Noto Sans Thai', sans-serif;
+  color: #18231f;
+  background: #f6f8f6;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
