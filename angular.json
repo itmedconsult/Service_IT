@@ -11,6 +11,10 @@
         "build": {
           "builder": "@angular/build:application",
           "options": {
+            "outputPath": {
+              "base": "dist/doctorease-price-control",
+              "browser": ""
+            },
             "browser": "src/main.ts",
             "polyfills": [
               "zone.js"
