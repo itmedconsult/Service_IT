@@ -26,6 +26,9 @@ export class PriceControlPageComponent implements OnInit {
   private readonly doctorEase = inject(DoctorEasePriceService);
   private readonly supabase = inject(SupabaseDataService);
 
+  readonly language = signal<'th' | 'en'>('th');
+  readonly theme = signal<'light' | 'dark'>('light');
+
   readonly products = signal<Product[]>(this.productStore.load(SAMPLE_PRODUCTS));
   readonly query = signal('');
   readonly group = signal('ทั้งหมด');
@@ -66,7 +69,27 @@ export class PriceControlPageComponent implements OnInit {
   readonly allOnPageSelected = computed(() => this.pagedProducts().length > 0 && this.pagedProducts().every((product) => this.selectedCodes().has(product.code)));
 
   ngOnInit(): void {
+    this.restorePreferences();
+    this.syncMessage.set(this.copy('กำลังเชื่อมต่อ Supabase...', 'Connecting to Supabase...'));
     void this.loadFromSupabase();
+  }
+
+  setLanguage(language: 'th' | 'en'): void {
+    this.language.set(language);
+    localStorage.setItem('price-control-language', language);
+    document.documentElement.lang = language;
+  }
+
+  toggleTheme(): void {
+    const theme = this.theme() === 'light' ? 'dark' : 'light';
+    this.theme.set(theme);
+    localStorage.setItem('price-control-theme', theme);
+    document.documentElement.dataset['theme'] = theme;
+    document.documentElement.style.colorScheme = theme;
+  }
+
+  copy(thai: string, english: string): string {
+    return this.language() === 'th' ? thai : english;
   }
 
   setQuery(value: string): void { this.query.set(value); this.page.set(1); }
@@ -83,9 +106,19 @@ export class PriceControlPageComponent implements OnInit {
         const remote = this.doctorEasePrices().get(product.code.toLowerCase());
         return remote && remote.price !== product.price;
       }).length;
-      this.importMessage.set(`ตรวจสอบ DoctorEase แล้ว: ราคาไม่ตรง ${mismatches} รายการ`);
+      this.importMessage.set(this.copy(
+        `ตรวจสอบ DoctorEase แล้ว: ราคาไม่ตรง ${mismatches} รายการ`,
+        `DoctorEase checked: ${mismatches} price mismatches`,
+      ));
     } catch {
+<<<<<<< Updated upstream
       this.importMessage.set('ตรวจสอบราคา DoctorEase ไม่สำเร็จ กรุณาตรวจสอบ Supabase Edge Function');
+=======
+      this.importMessage.set(this.copy(
+        'ตรวจสอบราคา DoctorEase ไม่สำเร็จ กรุณาเปิด npm run api และตรวจ API key',
+        'Could not check DoctorEase prices. Run npm run api and verify the API key.',
+      ));
+>>>>>>> Stashed changes
     } finally {
       this.doctorEaseChecking.set(false);
     }
@@ -120,16 +153,19 @@ export class PriceControlPageComponent implements OnInit {
 
   async deleteSelected(): Promise<void> {
     const codes = [...this.selectedCodes()];
-    if (!codes.length || !confirm(`ต้องการลบสินค้า ${codes.length} รายการใช่หรือไม่?`)) return;
+    if (!codes.length || !confirm(this.copy(
+      `ต้องการลบสินค้า ${codes.length} รายการใช่หรือไม่?`,
+      `Delete ${codes.length} selected products?`,
+    ))) return;
     try {
       await this.supabase.deleteProducts(codes);
       this.products.update((products) => products.filter((product) => !this.selectedCodes().has(product.code)));
       this.persistProducts();
       this.selectedCodes.set(new Set());
       this.changePage(this.page());
-      this.importMessage.set(`ลบสินค้า ${codes.length} รายการเรียบร้อย`);
+      this.importMessage.set(this.copy(`ลบสินค้า ${codes.length} รายการเรียบร้อย`, `Deleted ${codes.length} products`));
     } catch {
-      this.importMessage.set('ลบสินค้าไม่สำเร็จ กรุณาลองอีกครั้ง');
+      this.importMessage.set(this.copy('ลบสินค้าไม่สำเร็จ กรุณาลองอีกครั้ง', 'Could not delete products. Please try again.'));
     }
   }
 
@@ -149,16 +185,16 @@ export class PriceControlPageComponent implements OnInit {
     this.draft = this.createEmptyDraft();
     try {
       await this.supabase.upsertRule(rule);
-      this.syncMessage.set('ซิงก์ Supabase แล้ว');
+      this.syncMessage.set(this.copy('ซิงก์ Supabase แล้ว', 'Synced with Supabase'));
     } catch {
-      this.syncMessage.set('บันทึกกฎใน Supabase ไม่สำเร็จ — เก็บไว้ในเครื่องแล้ว');
+      this.syncMessage.set(this.copy('บันทึกกฎใน Supabase ไม่สำเร็จ — เก็บไว้ในเครื่องแล้ว', 'Could not save the rule to Supabase — saved locally'));
     }
   }
 
   async remove(id: string): Promise<void> {
     this.rules.update((rules) => rules.filter((rule) => rule.id !== id));
     this.persistRules();
-    try { await this.supabase.deleteRule(id); } catch { this.syncMessage.set('ลบกฎใน Supabase ไม่สำเร็จ'); }
+    try { await this.supabase.deleteRule(id); } catch { this.syncMessage.set(this.copy('ลบกฎใน Supabase ไม่สำเร็จ', 'Could not delete the Supabase rule')); }
   }
 
   async apply(): Promise<void> {
@@ -203,10 +239,16 @@ export class PriceControlPageComponent implements OnInit {
       const synced = await this.syncProducts();
       const duplicates = parsed.length - imported.length;
       this.importMessage.set(synced
-        ? `บันทึก Supabase แล้ว: เพิ่ม ${added} รายการ, แก้ไข ${updated} รายการ${duplicates ? ` (รวมรหัสซ้ำ ${duplicates} แถว โดยใช้ข้อมูลแถวล่าสุด)` : ''}`
-        : 'นำเข้าข้อมูลในหน้าเว็บแล้ว แต่บันทึกขึ้น Supabase ไม่สำเร็จ');
+        ? this.copy(
+          `บันทึก Supabase แล้ว: เพิ่ม ${added} รายการ, แก้ไข ${updated} รายการ${duplicates ? ` (รวมรหัสซ้ำ ${duplicates} แถว โดยใช้ข้อมูลแถวล่าสุด)` : ''}`,
+          `Saved to Supabase: ${added} added, ${updated} updated${duplicates ? ` (${duplicates} duplicate rows; latest row used)` : ''}`,
+        )
+        : this.copy('นำเข้าข้อมูลในหน้าเว็บแล้ว แต่บันทึกขึ้น Supabase ไม่สำเร็จ', 'Imported locally, but could not save to Supabase'));
     } catch {
-      this.importMessage.set('นำเข้าไม่สำเร็จ: ไม่พบคอลัมน์ Code/Name/Price หรือ รหัสสินค้า/ชื่อสินค้า/ราคา');
+      this.importMessage.set(this.copy(
+        'นำเข้าไม่สำเร็จ: ไม่พบคอลัมน์ Code/Name/Price หรือ รหัสสินค้า/ชื่อสินค้า/ราคา',
+        'Import failed: Code, Name, or Price columns were not found',
+      ));
     } finally { input.value = ''; }
   }
 
@@ -246,7 +288,7 @@ export class PriceControlPageComponent implements OnInit {
     try {
       this.priceHistory.set(await this.supabase.loadPriceHistory(product.code));
     } catch {
-      this.syncMessage.set('ไม่สามารถอ่าน Price History จาก Supabase ได้');
+      this.syncMessage.set(this.copy('ไม่สามารถอ่าน Price History จาก Supabase ได้', 'Could not load price history from Supabase'));
     } finally {
       this.historyLoading.set(false);
     }
@@ -266,7 +308,7 @@ export class PriceControlPageComponent implements OnInit {
     const isEditing = this.editingCode() !== null;
     const previous = isEditing ? this.products().find((item) => item.code === this.editingCode()) : undefined;
     if (!isEditing && this.products().some((item) => item.code.toLowerCase() === product.code.toLowerCase())) {
-      this.importMessage.set(`ไม่สามารถเพิ่มได้: พบรหัสสินค้า ${product.code} แล้ว`); return;
+      this.importMessage.set(this.copy(`ไม่สามารถเพิ่มได้: พบรหัสสินค้า ${product.code} แล้ว`, `Cannot add: product code ${product.code} already exists`)); return;
     }
     this.products.update((products) => isEditing
       ? products.map((item) => item.code === this.editingCode() ? product : item)
@@ -275,7 +317,9 @@ export class PriceControlPageComponent implements OnInit {
     this.page.set(this.totalPages());
     this.productDraft = this.createEmptyProduct();
     this.closeProductForm();
-    this.importMessage.set(isEditing ? 'แก้ไขสินค้าเรียบร้อย' : 'เพิ่มสินค้าเรียบร้อย');
+    this.importMessage.set(isEditing
+      ? this.copy('แก้ไขสินค้าเรียบร้อย', 'Product updated')
+      : this.copy('เพิ่มสินค้าเรียบร้อย', 'Product added'));
     if (await this.syncProducts() && previous && previous.price !== product.price) {
       await this.savePriceHistory([{ product_code: product.code, previous_price: previous.price, new_price: product.price, source: 'manual_edit' }]);
     }
@@ -306,19 +350,21 @@ export class PriceControlPageComponent implements OnInit {
         this.rules.set(rules);
         this.persistRules();
       }
-      this.syncMessage.set(products.length ? 'เชื่อมต่อ Supabase แล้ว' : 'เชื่อมต่อ Supabase แล้ว และย้ายข้อมูลเริ่มต้นแล้ว');
+      this.syncMessage.set(products.length
+        ? this.copy('เชื่อมต่อ Supabase แล้ว', 'Connected to Supabase')
+        : this.copy('เชื่อมต่อ Supabase แล้ว และย้ายข้อมูลเริ่มต้นแล้ว', 'Connected to Supabase and migrated starter data'));
     } catch {
-      this.syncMessage.set('เชื่อมต่อ Supabase ไม่สำเร็จ — ใช้ข้อมูลในเครื่องชั่วคราว');
+      this.syncMessage.set(this.copy('เชื่อมต่อ Supabase ไม่สำเร็จ — ใช้ข้อมูลในเครื่องชั่วคราว', 'Could not connect to Supabase — using local data'));
     }
   }
 
-  private async syncProducts(successMessage = 'ซิงก์ Supabase แล้ว'): Promise<boolean> {
+  private async syncProducts(successMessage = this.copy('ซิงก์ Supabase แล้ว', 'Synced with Supabase')): Promise<boolean> {
     try {
       await this.supabase.upsertProducts(this.products());
       this.syncMessage.set(successMessage);
       return true;
     } catch {
-      this.syncMessage.set('ซิงก์ Supabase ไม่สำเร็จ — เก็บไว้ในเครื่องแล้ว');
+      this.syncMessage.set(this.copy('ซิงก์ Supabase ไม่สำเร็จ — เก็บไว้ในเครื่องแล้ว', 'Supabase sync failed — saved locally'));
       return false;
     }
   }
@@ -327,7 +373,7 @@ export class PriceControlPageComponent implements OnInit {
     try {
       await this.supabase.addPriceHistory(entries);
     } catch {
-      this.syncMessage.set('บันทึกราคาแล้ว แต่เก็บ Price History ไม่สำเร็จ');
+      this.syncMessage.set(this.copy('บันทึกราคาแล้ว แต่เก็บ Price History ไม่สำเร็จ', 'Price saved, but price history could not be recorded'));
     }
   }
 
@@ -357,5 +403,18 @@ export class PriceControlPageComponent implements OnInit {
     const byCode = new Map<string, Product>();
     products.forEach((product) => byCode.set(product.code.toLowerCase(), product));
     return [...byCode.values()];
+  }
+
+  private restorePreferences(): void {
+    const savedLanguage = localStorage.getItem('price-control-language');
+    const language = savedLanguage === 'en' ? 'en' : 'th';
+    const savedTheme = localStorage.getItem('price-control-theme');
+    const preferredDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+    const theme = savedTheme === 'dark' || (savedTheme !== 'light' && preferredDark) ? 'dark' : 'light';
+    this.language.set(language);
+    this.theme.set(theme);
+    document.documentElement.lang = language;
+    document.documentElement.dataset['theme'] = theme;
+    document.documentElement.style.colorScheme = theme;
   }
 }
