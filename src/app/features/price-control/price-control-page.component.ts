@@ -85,7 +85,7 @@ export class PriceControlPageComponent implements OnInit {
       }).length;
       this.importMessage.set(`ตรวจสอบ DoctorEase แล้ว: ราคาไม่ตรง ${mismatches} รายการ`);
     } catch {
-      this.importMessage.set('ตรวจสอบราคา DoctorEase ไม่สำเร็จ กรุณาเปิด npm run api และตรวจ API key');
+      this.importMessage.set('ตรวจสอบราคา DoctorEase ไม่สำเร็จ กรุณาตรวจสอบ Supabase Edge Function');
     } finally {
       this.doctorEaseChecking.set(false);
     }

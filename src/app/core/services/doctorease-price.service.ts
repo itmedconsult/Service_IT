@@ -1,4 +1,6 @@
 import { Injectable } from '@angular/core';
+import { createClient } from '@supabase/supabase-js';
+import { environment } from '../../../environments/environment';
 
 export interface DoctorEaseServicePrice {
   code: string;
@@ -9,9 +11,9 @@ export interface DoctorEaseServicePrice {
 @Injectable({ providedIn: 'root' })
 export class DoctorEasePriceService {
   async loadPrices(): Promise<Map<string, DoctorEaseServicePrice>> {
-    const response = await fetch('/api/doctorease/services');
-    if (!response.ok) throw new Error('ไม่สามารถอ่านราคาจาก DoctorEase ได้');
-    const payload = await response.json() as { items: DoctorEaseServicePrice[] };
-    return new Map((payload.items ?? []).filter((item) => item.code).map((item) => [item.code.toLowerCase(), { ...item, price: Number(item.price) }]));
+    const client = createClient(environment.supabaseUrl, environment.supabasePublishableKey);
+    const { data, error } = await client.functions.invoke<{ items: DoctorEaseServicePrice[] }>('doctorease-services', { method: 'GET' });
+    if (error) throw error;
+    return new Map((data?.items ?? []).filter((item) => item.code).map((item) => [item.code.toLowerCase(), { ...item, price: Number(item.price) }]));
   }
 }
