@@ -111,14 +111,10 @@ export class PriceControlPageComponent implements OnInit {
         `DoctorEase checked: ${mismatches} price mismatches`,
       ));
     } catch {
-<<<<<<< Updated upstream
-      this.importMessage.set('ตรวจสอบราคา DoctorEase ไม่สำเร็จ กรุณาตรวจสอบ Supabase Edge Function');
-=======
       this.importMessage.set(this.copy(
-        'ตรวจสอบราคา DoctorEase ไม่สำเร็จ กรุณาเปิด npm run api และตรวจ API key',
-        'Could not check DoctorEase prices. Run npm run api and verify the API key.',
+        'ตรวจสอบราคา DoctorEase ไม่สำเร็จ กรุณาตรวจสอบ Supabase Edge Function',
+        'Could not check DoctorEase prices. Check the Supabase Edge Function.',
       ));
->>>>>>> Stashed changes
     } finally {
       this.doctorEaseChecking.set(false);
     }
