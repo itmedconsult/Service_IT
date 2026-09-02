@@ -9,7 +9,15 @@ export class ProductStoreService {
     try {
       const value = localStorage.getItem(STORAGE_KEY);
       const products = value ? JSON.parse(value) : null;
-      return Array.isArray(products) ? products as Product[] : [...fallback];
+      return Array.isArray(products)
+        ? products.map((product) => ({
+          ...product,
+          dfEnabled: product.dfEnabled === true,
+          dfPercent: product.dfEnabled === true && Number.isFinite(Number(product.dfPercent))
+            ? Number(product.dfPercent)
+            : null,
+        })) as Product[]
+        : [...fallback];
     } catch {
       return [...fallback];
     }

@@ -5,4 +5,6 @@ export interface Product {
   type: string;
   price: number;
   active: boolean;
+  dfEnabled: boolean;
+  dfPercent: number | null;
 }

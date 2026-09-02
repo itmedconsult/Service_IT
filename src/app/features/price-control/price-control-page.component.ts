@@ -253,8 +253,16 @@ export class PriceControlPageComponent implements OnInit {
   }
 
   async saveProduct(): Promise<void> {
-    const product = { ...this.productDraft, code: this.productDraft.code.trim(), name: this.productDraft.name.trim() };
-    if (!product.code || !product.name || !product.group.trim() || !Number.isFinite(product.price) || product.price < 0) return;
+    const product = {
+      ...this.productDraft,
+      code: this.productDraft.code.trim(),
+      name: this.productDraft.name.trim(),
+      dfPercent: this.productDraft.dfEnabled && this.productDraft.dfPercent !== null
+        ? Number(this.productDraft.dfPercent)
+        : null,
+    };
+    if (!product.code || !product.name || !product.group.trim() || !Number.isFinite(product.price) || product.price < 0
+      || (product.dfEnabled && (product.dfPercent === null || !Number.isFinite(product.dfPercent) || product.dfPercent < 0 || product.dfPercent > 100))) return;
     const isEditing = this.editingCode() !== null;
     const previous = isEditing ? this.products().find((item) => item.code === this.editingCode()) : undefined;
     if (!isEditing && this.products().some((item) => item.code.toLowerCase() === product.code.toLowerCase())) {
@@ -323,7 +331,7 @@ export class PriceControlPageComponent implements OnInit {
     }
   }
 
-  private createEmptyProduct(): Product { return { code: '', name: '', group: 'Filler', type: 'Operatives/Lab', price: 0, active: true }; }
+  private createEmptyProduct(): Product { return { code: '', name: '', group: 'Filler', type: 'Operatives/Lab', price: 0, active: true, dfEnabled: false, dfPercent: null }; }
 
   private toProduct(row: Record<string, unknown>): Product | null {
     const normalized = Object.fromEntries(Object.entries(row).map(([key, value]) => [key.trim().toLowerCase().replace(/[^a-z0-9ก-๙]/g, ''), value]));
@@ -334,7 +342,7 @@ export class PriceControlPageComponent implements OnInit {
     const price = Number(String(rawPrice ?? '').replace(/,/g, '').replace(/฿/g, ''));
     if (!code || !name || !Number.isFinite(price) || price < 0) return null;
     const active = String(value('ใช้งาน', 'active', 'activeall', 'status', 'สถานะ') ?? 'ใช่').trim().toLowerCase();
-    return { code, name, group: String(value('กลุ่ม', 'group', 'category') ?? 'อื่นๆ').trim() || 'อื่นๆ', type: String(value('ประเภท', 'type', 'product type', 'producttype') ?? 'Operatives/Lab').trim() || 'Operatives/Lab', price, active: !['ไม่', 'ไม่ใช่', 'false', '0', 'no', 'inactive'].includes(active) };
+    return { code, name, group: String(value('กลุ่ม', 'group', 'category') ?? 'อื่นๆ').trim() || 'อื่นๆ', type: String(value('ประเภท', 'type', 'product type', 'producttype') ?? 'Operatives/Lab').trim() || 'Operatives/Lab', price, active: !['ไม่', 'ไม่ใช่', 'false', '0', 'no', 'inactive'].includes(active), dfEnabled: false, dfPercent: null };
   }
 
   private isProductHeader(row: unknown[]): boolean {

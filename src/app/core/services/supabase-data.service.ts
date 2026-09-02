@@ -17,15 +17,33 @@ export class SupabaseDataService {
   private readonly client = createClient(environment.supabaseUrl, environment.supabasePublishableKey);
 
   async loadProducts(): Promise<Product[]> {
-    const { data, error } = await this.client.from('products').select('code,name,group,type,price,active').order('code');
+    const { data, error } = await this.client.from('products').select('code,name,group,type,price,active,df_enabled,df_percent').order('code');
     if (error) throw error;
-    return (data ?? []).map((product) => ({ code: product.code, name: product.name, group: product.group, type: product.type, price: Number(product.price), active: product.active }));
+    return (data ?? []).map((product) => ({
+      code: product.code,
+      name: product.name,
+      group: product.group,
+      type: product.type,
+      price: Number(product.price),
+      active: product.active,
+      dfEnabled: product.df_enabled === true,
+      dfPercent: product.df_enabled === true && product.df_percent !== null ? Number(product.df_percent) : null,
+    }));
   }
 
   async upsertProducts(products: readonly Product[]): Promise<void> {
     const batchSize = 250;
     for (let start = 0; start < products.length; start += batchSize) {
-      const records = products.slice(start, start + batchSize).map((product) => ({ code: product.code, name: product.name, group: product.group, type: product.type, price: product.price, active: product.active }));
+      const records = products.slice(start, start + batchSize).map((product) => ({
+        code: product.code,
+        name: product.name,
+        group: product.group,
+        type: product.type,
+        price: product.price,
+        active: product.active,
+        df_enabled: product.dfEnabled,
+        df_percent: product.dfEnabled ? product.dfPercent : null,
+      }));
       const { error } = await this.client.from('products').upsert(records, { onConflict: 'code' });
       if (error) throw error;
     }
