@@ -17,9 +17,30 @@ export class SupabaseDataService {
   private readonly client = createClient(environment.supabaseUrl, environment.supabasePublishableKey);
 
   async loadProducts(): Promise<Product[]> {
-    const { data, error } = await this.client.from('products').select('code,name,group,type,price,active,df_enabled,df_percent').order('code');
-    if (error) throw error;
-    return (data ?? []).map((product) => ({
+    // PostgREST limits a single response to 1,000 rows by default. Fetch every
+    // page so imports larger than that do not appear to disappear on refresh.
+    const pageSize = 1_000;
+    const rows: Array<{
+      code: string;
+      name: string;
+      group: string;
+      type: string;
+      price: number | string;
+      active: boolean;
+      df_enabled: boolean;
+      df_percent: number | string | null;
+    }> = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await this.client
+        .from('products')
+        .select('code,name,group,type,price,active,df_enabled,df_percent')
+        .order('code')
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      rows.push(...(data ?? []));
+      if ((data?.length ?? 0) < pageSize) break;
+    }
+    return rows.map((product) => ({
       code: product.code,
       name: product.name,
       group: product.group,
@@ -42,7 +63,7 @@ export class SupabaseDataService {
         price: product.price,
         active: product.active,
         df_enabled: product.dfEnabled,
-        df_percent: product.dfEnabled ? product.dfPercent : null,
+        df_percent: product.dfEnabled ? (product.dfPercent ?? 0) : null,
       }));
       const { error } = await this.client.from('products').upsert(records, { onConflict: 'code' });
       if (error) throw error;

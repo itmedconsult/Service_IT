@@ -34,6 +34,13 @@
     <select class="select" [ngModel]="group()" (ngModelChange)="setGroup($event)" [attr.aria-label]="copy('กรองตามกลุ่มสินค้า', 'Filter by product group')">
       @for (g of groups(); track g) { <option [value]="g">{{ g === 'ทั้งหมด' ? copy('ทั้งหมด', 'All groups') : g }}</option> }
     </select>
+    <select class="select" [ngModel]="priceStatusFilter()" (ngModelChange)="setPriceStatusFilter($event)" [attr.aria-label]="copy('กรองตามสถานะราคา', 'Filter by price status')">
+      <option value="all">{{ copy('สถานะราคาทั้งหมด', 'All price statuses') }}</option>
+      <option value="different">{{ copy('ราคาไม่ตรง', 'Price mismatch') }}</option>
+      <option value="match">{{ copy('อัปเดตแล้ว', 'Up to date') }}</option>
+      <option value="missing">{{ copy('ไม่พบใน DoctorEase', 'Not found in DoctorEase') }}</option>
+      <option value="pending">{{ copy('รอตรวจสอบ', 'Not checked') }}</option>
+    </select>
     <div class="toolbar-actions">
       <input #excelInput class="file-input" type="file" accept=".xlsx,.xls" (change)="importExcel($event)">
       <button class="btn" (click)="openImport(excelInput)">⇧ {{ copy('นำเข้า Excel', 'Import Excel') }}</button>

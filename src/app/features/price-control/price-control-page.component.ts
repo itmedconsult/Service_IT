@@ -32,6 +32,7 @@ export class PriceControlPageComponent implements OnInit {
   readonly products = signal<Product[]>(this.productStore.load(SAMPLE_PRODUCTS));
   readonly query = signal('');
   readonly group = signal('ทั้งหมด');
+  readonly priceStatusFilter = signal<'all' | 'different' | 'match' | 'missing' | 'pending'>('all');
   readonly page = signal(1);
   readonly open = signal(false);
   readonly productFormOpen = signal(false);
@@ -55,8 +56,9 @@ export class PriceControlPageComponent implements OnInit {
   readonly productTypes = computed(() => [...new Set([...DOCTOREASE_TYPES, ...this.products().map((product) => product.type)])]);
   readonly filtered = computed(() => this.products().filter((product) => {
     const matchesGroup = this.group() === 'ทั้งหมด' || this.group() === product.group;
+    const matchesPriceStatus = this.priceStatusFilter() === 'all' || this.doctorEaseStatus(product) === this.priceStatusFilter();
     const searchTarget = `${product.code} ${product.name}`.toLowerCase();
-    return matchesGroup && searchTarget.includes(this.query().toLowerCase());
+    return matchesGroup && matchesPriceStatus && searchTarget.includes(this.query().toLowerCase());
   }));
   readonly changed = computed(() => this.products().filter((product) => this.price(product) !== product.price));
   readonly totalPages = computed(() => Math.max(1, Math.ceil(this.filtered().length / this.pageSize)));
@@ -95,6 +97,11 @@ export class PriceControlPageComponent implements OnInit {
   setQuery(value: string): void { this.query.set(value); this.page.set(1); }
 
   setGroup(value: string): void { this.group.set(value); this.page.set(1); }
+
+  setPriceStatusFilter(value: 'all' | 'different' | 'match' | 'missing' | 'pending'): void {
+    this.priceStatusFilter.set(value);
+    this.page.set(1);
+  }
 
   changePage(page: number): void { this.page.set(Math.max(1, Math.min(page, this.totalPages()))); }
 
@@ -359,8 +366,11 @@ export class PriceControlPageComponent implements OnInit {
       await this.supabase.upsertProducts(this.products());
       this.syncMessage.set(successMessage);
       return true;
-    } catch {
-      this.syncMessage.set(this.copy('ซิงก์ Supabase ไม่สำเร็จ — เก็บไว้ในเครื่องแล้ว', 'Supabase sync failed — saved locally'));
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && 'code' in error ? (error as { code?: unknown }).code : undefined;
+      this.syncMessage.set(code === '23502' || code === '23514'
+        ? this.copy('ซิงก์ Supabase ไม่สำเร็จ — กรุณารัน database/add-product-df-fields.sql ใน Supabase SQL Editor', 'Supabase sync failed — run database/add-product-df-fields.sql in the Supabase SQL Editor')
+        : this.copy('ซิงก์ Supabase ไม่สำเร็จ — เก็บไว้ในเครื่องแล้ว', 'Supabase sync failed — saved locally'));
       return false;
     }
   }
@@ -384,7 +394,22 @@ export class PriceControlPageComponent implements OnInit {
     const price = Number(String(rawPrice ?? '').replace(/,/g, '').replace(/฿/g, ''));
     if (!code || !name || !Number.isFinite(price) || price < 0) return null;
     const active = String(value('ใช้งาน', 'active', 'activeall', 'status', 'สถานะ') ?? 'ใช่').trim().toLowerCase();
-    return { code, name, group: String(value('กลุ่ม', 'group', 'category') ?? 'อื่นๆ').trim() || 'อื่นๆ', type: String(value('ประเภท', 'type', 'product type', 'producttype') ?? 'Operatives/Lab').trim() || 'Operatives/Lab', price, active: !['ไม่', 'ไม่ใช่', 'false', '0', 'no', 'inactive'].includes(active), dfEnabled: false, dfPercent: null };
+    const rawDfEnabled = String(value('มีdf', 'have df', 'havedf', 'df enabled', 'dfenabled') ?? 'ไม่').trim().toLowerCase();
+    const dfEnabled = ['ใช่', 'true', '1', 'yes', 'y'].includes(rawDfEnabled);
+    const rawDfPercent = value('df', 'df percent', 'dfpercent', 'เปอร์เซ็นต์df');
+    const dfPercent = Number(String(rawDfPercent ?? '').replace(/,/g, '').replace(/%/g, ''));
+    return {
+      code,
+      name,
+      group: String(value('กลุ่ม', 'group', 'category') ?? 'อื่นๆ').trim() || 'อื่นๆ',
+      type: String(value('ประเภท', 'type', 'product type', 'producttype') ?? 'Operatives/Lab').trim() || 'Operatives/Lab',
+      price,
+      active: !['ไม่', 'ไม่ใช่', 'false', '0', 'no', 'inactive'].includes(active),
+      dfEnabled,
+      // "Have DF" files may not include a percentage column. The database
+      // accepts 0 as the safe, explicit value until one is entered in the UI.
+      dfPercent: dfEnabled && Number.isFinite(dfPercent) && dfPercent >= 0 && dfPercent <= 100 ? dfPercent : (dfEnabled ? 0 : null),
+    };
   }
 
   private isProductHeader(row: unknown[]): boolean {

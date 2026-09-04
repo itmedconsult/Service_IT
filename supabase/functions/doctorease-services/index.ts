@@ -23,7 +23,11 @@ Deno.serve(async (request) => {
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
 
   try {
-    if (Date.now() < cache.expiresAt) return response({ items: cache.items });
+    // The Price Control screen asks for a fresh comparison on demand. Bypass
+    // the in-memory cache for that explicit request so recently changed
+    // DoctorEase prices are not reported as mismatches for up to 15 minutes.
+    const refresh = new URL(request.url).searchParams.get('refresh') === 'true';
+    if (!refresh && Date.now() < cache.expiresAt) return response({ items: cache.items });
 
     const apiKey = Deno.env.get('DOCTOREASE_API_KEY');
     const baseUrl = Deno.env.get('DOCTOREASE_BASE_URL') ?? Deno.env.get('DOCTOREASE_API_BASE_URL');

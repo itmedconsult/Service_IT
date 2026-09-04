@@ -12,7 +12,7 @@ export interface DoctorEaseServicePrice {
 export class DoctorEasePriceService {
   async loadPrices(): Promise<Map<string, DoctorEaseServicePrice>> {
     const client = createClient(environment.supabaseUrl, environment.supabasePublishableKey);
-    const { data, error } = await client.functions.invoke<{ items: DoctorEaseServicePrice[] }>('doctorease-services', { method: 'GET' });
+    const { data, error } = await client.functions.invoke<{ items: DoctorEaseServicePrice[] }>('doctorease-services?refresh=true', { method: 'GET' });
     if (error) throw error;
     return new Map((data?.items ?? []).filter((item) => item.code).map((item) => [item.code.toLowerCase(), { ...item, price: Number(item.price) }]));
   }
