@@ -1,13 +1,16 @@
 <main>
-  <header>
-    <div>
-      <p class="eyebrow">DOCTOREASE · PRICE CONTROL</p>
-      <h1>{{ copy('ศูนย์จัดการราคา', 'Price Control Center') }}</h1>
-      <p class="sub">{{ copy('จัดการสินค้า ตรวจราคา และซิงก์ข้อมูลในที่เดียว', 'Manage products, check prices, and sync data in one place') }}</p>
+  <header class="page-header">
+    <div class="brand-lockup">
+      <div class="brand-mark" aria-hidden="true">DE</div>
+      <div>
+        <p class="product-name">DoctorEase Price Control</p>
+        <h1>{{ copy('จัดการราคาให้แม่นยำในที่เดียว', 'Accurate pricing, in one place') }}</h1>
+        <p class="sub">{{ copy('ค้นหา ตรวจต้นทุน และยืนยันราคาได้โดยไม่หลุดจากหน้าหลัก', 'Find, cost-check, and confirm prices without leaving the workspace') }}</p>
+      </div>
     </div>
     <div class="preferences" [attr.aria-label]="copy('การตั้งค่าการแสดงผล', 'Display preferences')">
       <div class="language-switch" role="group" [attr.aria-label]="copy('เลือกภาษา', 'Choose language')">
-        <button type="button" [class.active]="language() === 'th'" [attr.aria-pressed]="language() === 'th'" (click)="setLanguage('th')">TH</button>
+        <button type="button" [class.active]="language() === 'th'" [attr.aria-pressed]="language() === 'th'" (click)="setLanguage('th')">ไทย</button>
         <button type="button" [class.active]="language() === 'en'" [attr.aria-pressed]="language() === 'en'" (click)="setLanguage('en')">EN</button>
       </div>
       <button type="button" class="theme-toggle" (click)="toggleTheme()" [attr.aria-label]="theme() === 'light' ? copy('เปิดโหมดมืด', 'Switch to dark mode') : copy('เปิดโหมดสว่าง', 'Switch to light mode')">
@@ -17,119 +20,164 @@
     </div>
   </header>
 
-  <div class="notice">⚠ {{ copy('ตรวจสอบราคากับ DoctorEase ก่อนยืนยันการเปลี่ยนแปลง', 'Check prices with DoctorEase before confirming changes') }}</div>
-  <div class="sync-status">● {{ syncMessage() }}</div>
+  <section class="status-rail" aria-live="polite">
+    <div class="sync-status"><span aria-hidden="true"></span>{{ syncMessage() }}</div>
+    <div class="notice"><b>!</b> {{ copy('ตรวจสอบราคากับ DoctorEase ก่อนยืนยันการเปลี่ยนแปลง', 'Check prices with DoctorEase before confirming changes') }}</div>
+  </section>
+
   @if (importMessage()) {
-    <div class="flash" role="status">{{ importMessage() }} <button (click)="importMessage.set('')" [attr.aria-label]="copy('ปิดข้อความ', 'Dismiss message')">×</button></div>
+    <div class="flash" role="status">
+      <span>{{ importMessage() }}</span>
+      <button type="button" (click)="importMessage.set('')" [attr.aria-label]="copy('ปิดข้อความ', 'Dismiss message')">×</button>
+    </div>
   }
 
-  <section class="metrics">
-    <div class="metric"><span>{{ copy('สินค้าทั้งหมด', 'Total products') }}</span><strong>{{ products().length }}</strong></div>
-    <div class="metric accent"><span>{{ copy('รอปรับราคา', 'Pending price changes') }}</span><strong>{{ changed().length }}</strong></div>
-    <div class="sync"><span></span><div><b>{{ copy('ระบบพร้อมใช้งาน', 'System ready') }}</b><small>{{ syncMessage() }}</small></div></div>
+  <section class="metrics" [attr.aria-label]="copy('ภาพรวมสินค้า', 'Product overview')">
+    <article class="metric"><span>{{ copy('สินค้าทั้งหมด', 'Total products') }}</span><strong>{{ products().length }}</strong></article>
+    <article class="metric accent"><span>{{ copy('รอปรับราคา', 'Pending changes') }}</span><strong>{{ changed().length }}</strong></article>
+    <article class="metric risk"><span>{{ copy('ต่ำกว่า COG', 'Below COG') }}</span><strong>{{ belowCostCount() }}</strong></article>
+    <article class="metric result-count"><span>{{ copy('ผลลัพธ์ที่แสดง', 'Visible results') }}</span><strong>{{ filtered().length }}</strong></article>
   </section>
 
-  <section class="toolbar">
-    <div class="search">⌕ <input [ngModel]="query()" (ngModelChange)="setQuery($event)" [placeholder]="copy('ค้นหาด้วยรหัสหรือชื่อสินค้า', 'Search by product code or name')"></div>
-    <select class="select" [ngModel]="group()" (ngModelChange)="setGroup($event)" [attr.aria-label]="copy('กรองตามกลุ่มสินค้า', 'Filter by product group')">
-      @for (g of groups(); track g) { <option [value]="g">{{ g === 'ทั้งหมด' ? copy('ทั้งหมด', 'All groups') : g }}</option> }
-    </select>
-    <select class="select" [ngModel]="priceStatusFilter()" (ngModelChange)="setPriceStatusFilter($event)" [attr.aria-label]="copy('กรองตามสถานะราคา', 'Filter by price status')">
-      <option value="all">{{ copy('สถานะราคาทั้งหมด', 'All price statuses') }}</option>
-      <option value="different">{{ copy('ราคาไม่ตรง', 'Price mismatch') }}</option>
-      <option value="match">{{ copy('อัปเดตแล้ว', 'Up to date') }}</option>
-      <option value="missing">{{ copy('ไม่พบใน DoctorEase', 'Not found in DoctorEase') }}</option>
-      <option value="pending">{{ copy('รอตรวจสอบ', 'Not checked') }}</option>
-    </select>
-    <div class="toolbar-actions">
-      <input #excelInput class="file-input" type="file" accept=".xlsx,.xls" (change)="importExcel($event)">
-      <button class="btn" (click)="openImport(excelInput)">⇧ {{ copy('นำเข้า Excel', 'Import Excel') }}</button>
-      <button class="btn" (click)="exportExcel()">⇩ {{ copy('ส่งออก Excel', 'Export Excel') }}</button>
-      <button class="btn" (click)="open.set(true)">⚙ {{ copy('กฎปรับราคา', 'Price rules') }}</button>
-      <button class="btn price-check" [disabled]="doctorEaseChecking()" (click)="checkDoctorEasePrices()">{{ doctorEaseChecking() ? copy('กำลังตรวจสอบ...', 'Checking...') : copy('↻ ตรวจราคา DoctorEase', '↻ Check DoctorEase prices') }}</button>
-      <button class="btn primary" (click)="openAddProduct()">＋ {{ copy('เพิ่มสินค้า', 'Add product') }}</button>
-      <button class="btn delete-selected" [disabled]="!selectedCodes().size" (click)="deleteSelected()">⌫ {{ copy('ลบที่เลือก', 'Delete selected') }} ({{ selectedCodes().size }})</button>
-      <button class="btn primary" [disabled]="!changed().length" (click)="apply()">✓ {{ copy('ยืนยันการปรับราคา', 'Confirm price changes') }} ({{ changed().length }})</button>
+  <section class="control-deck" [attr.aria-label]="copy('ค้นหาและจัดการสินค้า', 'Find and manage products')">
+    <div class="control-heading">
+      <div><h2>{{ copy('ค้นหาราคา', 'Find a price') }}</h2><p>{{ copy('กรอกราคาอย่างเดียวเพื่อดูสินค้าที่ราคาตรงกัน', 'Enter a price to show exact matches') }}</p></div>
+      <span class="result-chip">{{ filtered().length }} {{ copy('รายการ', 'results') }}</span>
+    </div>
+
+    <div class="filter-grid">
+      <label class="field price-query">
+        <span>{{ copy('ราคาสินค้า', 'Product price') }}</span>
+        <div class="input-shell"><b aria-hidden="true">฿</b><input type="number" min="0" step="0.01" inputmode="decimal" [ngModel]="priceFilter()" (ngModelChange)="setPriceFilter($event)" [placeholder]="copy('เช่น 3,500', 'e.g. 3,500')"></div>
+        <small>{{ copy('เว้นว่างเพื่อแสดงทุกราคา', 'Leave blank to show every price') }}</small>
+      </label>
+      <label class="field search-query">
+        <span>{{ copy('รหัสหรือชื่อสินค้า', 'Code or product name') }}</span>
+        <div class="input-shell"><i aria-hidden="true">⌕</i><input [ngModel]="query()" (ngModelChange)="setQuery($event)" [placeholder]="copy('ค้นหาสินค้า', 'Search products')"></div>
+      </label>
+      <label class="field">
+        <span>{{ copy('กลุ่มสินค้า', 'Product group') }}</span>
+        <select [ngModel]="group()" (ngModelChange)="setGroup($event)">@for (g of groups(); track g) { <option [value]="g">{{ g === 'ทั้งหมด' ? copy('ทุกกลุ่ม', 'All groups') : g }}</option> }</select>
+      </label>
+      <label class="field">
+        <span>{{ copy('สถานะราคา', 'Price status') }}</span>
+        <select [ngModel]="priceStatusFilter()" (ngModelChange)="setPriceStatusFilter($event)">
+          <option value="all">{{ copy('ทุกสถานะราคา', 'All price statuses') }}</option><option value="different">{{ copy('ราคาไม่ตรง', 'Price mismatch') }}</option><option value="match">{{ copy('อัปเดตแล้ว', 'Up to date') }}</option><option value="missing">{{ copy('ไม่พบใน DoctorEase', 'Not found in DoctorEase') }}</option><option value="pending">{{ copy('รอตรวจสอบ', 'Not checked') }}</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>{{ copy('สถานะต้นทุน', 'Cost status') }}</span>
+        <select [ngModel]="costStatusFilter()" (ngModelChange)="setCostStatusFilter($event)">
+          <option value="all">{{ copy('ทุกสถานะ COG', 'All COG statuses') }}</option><option value="below_cog">{{ copy('ต่ำกว่า COG', 'Below COG') }}</option><option value="ok">{{ copy('ไม่ต่ำกว่า COG', 'At/above COG') }}</option><option value="missing_cog">{{ copy('ไม่มี COG', 'Missing COG') }}</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="action-bar">
+      <div class="action-cluster primary-actions">
+        <button class="btn price-check" [disabled]="doctorEaseChecking()" (click)="checkDoctorEasePrices()"><span aria-hidden="true">↻</span> {{ doctorEaseChecking() ? copy('กำลังตรวจสอบ...', 'Checking...') : copy('ตรวจราคา DoctorEase', 'Check DoctorEase prices') }}</button>
+        <button class="btn confirm" [disabled]="!changed().length" (click)="apply()"><span aria-hidden="true">✓</span> {{ copy('ยืนยันการปรับราคา', 'Confirm price changes') }} <b>{{ changed().length }}</b></button>
+      </div>
+      <div class="action-cluster utility-actions">
+        <input #excelInput class="file-input" type="file" accept=".xlsx,.xls" (change)="importExcel($event)">
+        <input #costExcelInput class="file-input" type="file" accept=".xlsx,.xls" (change)="previewCostImport($event)">
+        <button class="btn" (click)="openImport(excelInput)">⇧ {{ copy('นำเข้าสินค้า', 'Import products') }}</button>
+        <button class="btn" (click)="openCostImport(costExcelInput)">⇧ {{ copy('นำเข้า COG', 'Import COG') }}</button>
+        <button class="btn" (click)="exportExcel()">⇩ {{ copy('ส่งออก', 'Export') }}</button>
+        <button class="btn" (click)="open.set(true)">⌁ {{ copy('กฎปรับราคา', 'Price rules') }}</button>
+        <button class="btn add-product" (click)="openAddProduct()">＋ {{ copy('เพิ่มสินค้า', 'Add product') }}</button>
+        <button class="btn delete-selected" [disabled]="!selectedCodes().size" (click)="deleteSelected()">⌫ {{ copy('ลบที่เลือก', 'Delete selected') }} <b>{{ selectedCodes().size }}</b></button>
+      </div>
     </div>
   </section>
-  <p class="import-hint">{{ copy('ไฟล์ Excel ต้องมีคอลัมน์: รหัสสินค้า, ชื่อสินค้า, กลุ่ม, ประเภท, ราคา, ใช้งาน — ส่งออกไฟล์เพื่อใช้เป็นแม่แบบได้', 'Excel requires: Code, Name, Group, Type, Price, and Active columns — export a file to use as a template') }}</p>
+  <p class="import-hint">{{ copy('ไฟล์ COG ต้องมี Code, Name และ COG ระบบจะแสดงตัวอย่างก่อนบันทึก และไม่เขียนทับราคาขาย', 'COG files require Code, Name, and COG. You will see a preview before saving; selling prices are not overwritten.') }}</p>
 
   <section class="table-wrap">
     <table>
+      <caption class="sr-only">{{ copy('รายการสินค้าและราคา', 'Products and prices') }}</caption>
       <thead><tr>
         <th class="check-column"><input type="checkbox" [checked]="allOnPageSelected()" (change)="togglePageSelection()" [attr.aria-label]="copy('เลือกรายการในหน้านี้ทั้งหมด', 'Select all products on this page')"></th>
-        <th>{{ copy('รหัสสินค้า', 'Code') }}</th><th>{{ copy('ชื่อสินค้า', 'Product') }}</th><th>{{ copy('กลุ่ม', 'Group') }}</th><th>{{ copy('ราคาเรา', 'Our price') }}</th><th>{{ copy('ราคา DoctorEase', 'DoctorEase price') }}</th><th>{{ copy('สถานะราคา', 'Price status') }}</th><th>{{ copy('จัดการ', 'Actions') }}</th>
+        <th>{{ copy('รหัสสินค้า', 'Code') }}</th><th>{{ copy('สินค้า', 'Product') }}</th><th>{{ copy('กลุ่ม', 'Group') }}</th><th class="numeric">{{ copy('ราคาเรา', 'Our price') }}</th><th class="numeric">COG</th><th class="numeric">{{ copy('กำไรขั้นต้น', 'Gross margin') }}</th><th>{{ copy('สถานะต้นทุน', 'Cost status') }}</th><th class="numeric">{{ copy('ราคา DoctorEase', 'DoctorEase price') }}</th><th>{{ copy('สถานะราคา', 'Price status') }}</th><th>{{ copy('จัดการ', 'Actions') }}</th>
       </tr></thead>
       <tbody>
         @for (p of pagedProducts(); track p.code) {
           <tr>
             <td class="check-column"><input type="checkbox" [checked]="selectedCodes().has(p.code)" (change)="toggleProductSelection(p.code)" [attr.aria-label]="copy('เลือกรายการ ', 'Select ') + p.name"></td>
-            <td class="code">{{ p.code }}</td><td><b>{{ p.name }}</b><small>{{ p.type }}</small></td><td><span class="tag">{{ p.group }}</span></td>
-            <td>{{ p.price | currency:'THB':'symbol-narrow':'1.0-0' }}</td><td>@if (doctorEasePrice(p) !== null) { {{ doctorEasePrice(p) | currency:'THB':'symbol-narrow':'1.0-0' }} } @else { — }</td>
-            <td><span class="price-status" [class.match]="doctorEaseStatus(p) === 'match'" [class.different]="doctorEaseStatus(p) === 'different'" [class.missing]="doctorEaseStatus(p) === 'missing'">
-              @switch (doctorEaseStatus(p)) {
-                @case ('match') { ✓ {{ copy('อัปเดตแล้ว', 'Up to date') }} }
-                @case ('different') { ! {{ copy('ราคาไม่ตรง', 'Price mismatch') }} }
-                @case ('missing') { {{ copy('ไม่พบใน DoctorEase', 'Not found in DoctorEase') }} }
-                @default { {{ copy('รอตรวจสอบ', 'Not checked') }} }
-              }
-            </span></td>
+            <td class="code">{{ p.code }}</td><td class="product-cell"><b>{{ p.name }}</b><small>{{ p.type }}</small></td><td><span class="tag">{{ p.group }}</span></td>
+            <td class="money">{{ p.price | currency:'THB':'symbol-narrow':'1.0-0' }}</td>
+            <td class="money muted-money">@if (cost(p) !== null) { {{ cost(p) | currency:'THB':'symbol-narrow':'1.0-0' }} } @else { — }</td>
+            <td class="money" [class.margin-negative]="costStatus(p) === 'below_cog'">@if (grossMargin(p) !== null) { {{ grossMargin(p) | currency:'THB':'symbol-narrow':'1.0-0' }} <small>{{ marginPercent(p) | number:'1.1-1' }}%</small> } @else { — }</td>
+            <td><span class="cost-status" [class.below]="costStatus(p) === 'below_cog'" [class.ok]="costStatus(p) === 'ok'" [class.missing]="costStatus(p) === 'missing_cog'">@switch (costStatus(p)) { @case ('below_cog') { ! {{ copy('ต่ำกว่า COG', 'Below COG') }} } @case ('ok') { ✓ {{ copy('ปกติ', 'OK') }} } @default { {{ copy('ไม่มี COG', 'Missing COG') }} } }</span></td>
+            <td class="money muted-money">@if (doctorEasePrice(p) !== null) { {{ doctorEasePrice(p) | currency:'THB':'symbol-narrow':'1.0-0' }} } @else { — }</td>
+            <td><span class="price-status" [class.match]="doctorEaseStatus(p) === 'match'" [class.different]="doctorEaseStatus(p) === 'different'" [class.missing]="doctorEaseStatus(p) === 'missing'">@switch (doctorEaseStatus(p)) { @case ('match') { ✓ {{ copy('อัปเดตแล้ว', 'Up to date') }} } @case ('different') { ! {{ copy('ราคาไม่ตรง', 'Price mismatch') }} } @case ('missing') { {{ copy('ไม่พบในระบบ', 'Not found') }} } @default { {{ copy('รอตรวจสอบ', 'Not checked') }} } }</span></td>
             <td class="row-actions"><button class="history-product" (click)="showPriceHistory(p)">◷ {{ copy('ประวัติ', 'History') }}</button><button class="edit-product" (click)="editProduct(p)">✎ {{ copy('แก้ไข', 'Edit') }}</button></td>
           </tr>
-        } @empty { <tr><td colspan="8" class="empty-table">{{ copy('ไม่พบรายการสินค้า', 'No products found') }}</td></tr> }
+        } @empty { <tr><td colspan="11" class="empty-table"><b>{{ copy('ไม่พบสินค้าที่ตรงกับตัวกรอง', 'No products match these filters') }}</b><span>{{ copy('ลองล้างราคาหรือเปลี่ยนตัวกรองด้านบน', 'Clear the price or adjust the filters above') }}</span></td></tr> }
       </tbody>
     </table>
   </section>
 
   <nav class="pagination" [attr.aria-label]="copy('แบ่งหน้ารายการสินค้า', 'Product pagination')">
-    <span>{{ copy('แสดง', 'Showing') }} {{ pageStart() }}–{{ pageEnd() }} {{ copy('จาก', 'of') }} {{ filtered().length }} {{ copy('รายการ', 'products') }}</span>
-    <div><button class="page-btn" [disabled]="page() === 1" (click)="changePage(page() - 1)">‹ {{ copy('ก่อนหน้า', 'Previous') }}</button><span>{{ copy('หน้า', 'Page') }} {{ page() }} / {{ totalPages() }}</span><button class="page-btn" [disabled]="page() === totalPages()" (click)="changePage(page() + 1)">{{ copy('ถัดไป', 'Next') }} ›</button></div>
+    <span>{{ copy('แสดง', 'Showing') }} <b>{{ pageStart() }}–{{ pageEnd() }}</b> {{ copy('จาก', 'of') }} <b>{{ filtered().length }}</b> {{ copy('รายการ', 'products') }}</span>
+    <div><button class="page-btn" [disabled]="page() === 1" (click)="changePage(page() - 1)">‹ {{ copy('ก่อนหน้า', 'Previous') }}</button><span>{{ copy('หน้า', 'Page') }} <b>{{ page() }}</b> / {{ totalPages() }}</span><button class="page-btn" [disabled]="page() === totalPages()" (click)="changePage(page() + 1)">{{ copy('ถัดไป', 'Next') }} ›</button></div>
   </nav>
 </main>
 
 @if (open()) {
-  <div class="overlay"><aside>
-    <div class="drawer-head"><h2>{{ copy('กฎปรับราคา', 'Price rules') }}</h2><button (click)="open.set(false)" [attr.aria-label]="copy('ปิด', 'Close')">×</button></div>
-    <div class="rules">
-      @for (r of rules(); track r.id) { <article><div><b>{{ r.name }}</b><small>{{ r.group }} · {{ r.mode === 'percent' ? r.value + '%' : r.value }}</small></div><button class="delete" (click)="remove(r.id)" [attr.aria-label]="copy('ลบกฎ', 'Delete rule')">×</button></article> }
-      @empty { <p class="empty">{{ copy('ยังไม่มีกฎราคา', 'No price rules yet') }}</p> }
-    </div>
+  <div class="overlay" (click)="open.set(false)"><aside (click)="$event.stopPropagation()">
+    <div class="drawer-head"><div><p class="panel-kicker">{{ copy('ตั้งราคาเป็นชุด', 'Batch pricing') }}</p><h2>{{ copy('กฎปรับราคา', 'Price rules') }}</h2></div><button type="button" (click)="open.set(false)" [attr.aria-label]="copy('ปิด', 'Close')">×</button></div>
+    <div class="rules">@for (r of rules(); track r.id) { <article><div><b>{{ r.name }}</b><small>{{ r.group }} · {{ r.mode === 'percent' ? r.value + '%' : r.value }}</small></div><button class="delete" (click)="remove(r.id)" [attr.aria-label]="copy('ลบกฎ', 'Delete rule')">×</button></article> } @empty { <p class="empty">{{ copy('ยังไม่มีกฎราคา เพิ่มกฎแรกด้านล่าง', 'No price rules yet. Add the first one below.') }}</p> }</div>
     <form (ngSubmit)="save()">
-      <h3>{{ copy('เพิ่มกฎราคา', 'Add price rule') }}</h3>
+      <h3>{{ copy('เพิ่มกฎใหม่', 'Add a new rule') }}</h3>
       <label>{{ copy('ชื่อกฎ', 'Rule name') }}<input [(ngModel)]="draft.name" name="name" required></label>
       <label>{{ copy('กลุ่มสินค้า', 'Product group') }}<input [(ngModel)]="draft.group" name="group" required></label>
       <label>{{ copy('วิธีปรับ', 'Adjustment method') }}<select [(ngModel)]="draft.mode" name="mode"><option value="percent">{{ copy('เพิ่ม/ลดเป็นเปอร์เซ็นต์', 'Increase/decrease by percent') }}</option><option value="amount">{{ copy('เพิ่ม/ลดเป็นเงินบาท', 'Increase/decrease by amount') }}</option><option value="fixed">{{ copy('กำหนดราคาใหม่', 'Set a fixed price') }}</option></select></label>
       <label>{{ copy('ค่า', 'Value') }}<input type="number" [(ngModel)]="draft.value" name="value" required></label>
-      <button class="btn primary full">{{ copy('บันทึกกฎราคา', 'Save price rule') }}</button>
+      <button class="btn confirm full">{{ copy('บันทึกกฎราคา', 'Save price rule') }}</button>
     </form>
   </aside></div>
 }
 
+@if (costImportOpen()) {
+  <div class="modal-backdrop" (click)="costImportOpen.set(false)"><section class="cost-modal" (click)="$event.stopPropagation()">
+    <div class="drawer-head"><div><p class="panel-kicker">{{ copy('ตรวจสอบก่อนนำเข้า', 'Import preview') }}</p><h2>{{ costImportFileName() }}</h2></div><button type="button" (click)="costImportOpen.set(false)" [attr.aria-label]="copy('ปิด', 'Close')">×</button></div>
+    <div class="cost-summary"><article><span>{{ copy('ใช้ได้', 'Accepted') }}</span><b>{{ costPreviewSummary().valid }}</b></article><article><span>{{ copy('ข้อมูลผิด', 'Invalid') }}</span><b>{{ costPreviewSummary().invalid }}</b></article><article><span>{{ copy('รหัสซ้ำ', 'Duplicates') }}</span><b>{{ costPreviewSummary().duplicates }}</b></article><article><span>{{ copy('ไม่พบสินค้า', 'Unmatched') }}</span><b>{{ costPreviewSummary().missing }}</b></article></div>
+    <p class="import-hint">{{ copy('ระบบจะบันทึกเฉพาะรายการที่ใช้ได้ และเก็บประวัติของรอบนำเข้านี้', 'Only accepted rows will be activated; this import is retained in the audit history.') }}</p>
+    <div class="cost-preview"><table><thead><tr><th>Code</th><th>Name</th><th>COG</th></tr></thead><tbody>@for (row of costImportPreview()?.slice(0, 12); track $index) { <tr><td class="code">{{ row.code }}</td><td>{{ row.name || '—' }}</td><td class="money">{{ row.cog === null ? '—' : (row.cog | currency:'THB':'symbol-narrow':'1.0-0') }}</td></tr> }</tbody></table></div>
+    <div class="modal-actions"><button type="button" class="btn" (click)="costImportOpen.set(false)">{{ copy('ยกเลิก', 'Cancel') }}</button><button class="btn confirm" [disabled]="costImporting()" (click)="confirmCostImport()">{{ costImporting() ? copy('กำลังบันทึก...', 'Saving...') : copy('ยืนยันนำเข้า COG', 'Confirm COG import') }}</button></div>
+  </section></div>
+}
+
+@if (approvalOpen()) {
+  <div class="modal-backdrop" (click)="approvalOpen.set(false)"><form class="approval-modal" (ngSubmit)="confirmPriceOverride()" (click)="$event.stopPropagation()">
+    <div class="drawer-head"><div><p class="panel-kicker risk-text">{{ copy('ต้องยืนยันเพิ่มเติม', 'Approval required') }}</p><h2>{{ copy('ราคาต่ำกว่า COG', 'Price below COG') }}</h2></div><button type="button" (click)="approvalOpen.set(false)" [attr.aria-label]="copy('ปิด', 'Close')">×</button></div>
+    <p>{{ copy('การบันทึกนี้จะถูกเก็บในประวัติพร้อม COG ณ เวลาที่อนุมัติ', 'This change will retain the COG snapshot at approval time.') }}</p>
+    <label>{{ copy('ชื่อผู้ยืนยัน', 'Approver name') }}<input [ngModel]="approvalName()" (ngModelChange)="approvalName.set($event)" name="approvalName" required></label>
+    <label>{{ copy('เหตุผลที่ตั้งราคาต่ำกว่าทุน', 'Reason for below-cost price') }}<textarea [ngModel]="approvalReason()" (ngModelChange)="approvalReason.set($event)" name="approvalReason" required></textarea></label>
+    <div class="modal-actions"><button type="button" class="btn" (click)="approvalOpen.set(false)">{{ copy('ยกเลิก', 'Cancel') }}</button><button class="btn danger">{{ copy('ยืนยันและบันทึก', 'Confirm and save') }}</button></div>
+  </form></div>
+}
+
 @if (productFormOpen()) {
-  <div class="modal-backdrop" (click)="closeProductForm()">
-    <form class="product-modal" (ngSubmit)="saveProduct()" (click)="$event.stopPropagation()">
-      <div class="drawer-head"><div><p class="eyebrow">PRODUCT CATALOG</p><h2>{{ editingCode() ? copy('แก้ไขสินค้า', 'Edit product') : copy('เพิ่มสินค้า', 'Add product') }}</h2></div><button type="button" (click)="closeProductForm()" [attr.aria-label]="copy('ปิด', 'Close')">×</button></div>
-      <div class="product-grid">
-        <label>{{ copy('รหัสสินค้า', 'Product code') }}<input [(ngModel)]="productDraft.code" name="productCode" [readonly]="editingCode() !== null" required></label>
-        <label>{{ copy('ชื่อสินค้า', 'Product name') }}<input [(ngModel)]="productDraft.name" name="productName" required></label>
-        <label>{{ copy('กลุ่มสินค้า', 'Product group') }}<select [(ngModel)]="productDraft.group" name="productGroup" required>@for (option of productGroups(); track option) { <option [value]="option">{{ option }}</option> }</select></label>
-        <label>{{ copy('ประเภท', 'Type') }}<select [(ngModel)]="productDraft.type" name="productType" required>@for (option of productTypes(); track option) { <option [value]="option">{{ option }}</option> }</select></label>
-        <label>{{ copy('ราคา', 'Price') }}<input type="number" min="0" [(ngModel)]="productDraft.price" name="productPrice" required></label>
-        <label class="checkbox-label"><input type="checkbox" [(ngModel)]="productDraft.active" name="productActive"> {{ copy('เปิดใช้งานสินค้า', 'Active product') }}</label>
-        <div class="df-toggle"><label class="checkbox-label"><input type="checkbox" [(ngModel)]="productDraft.dfEnabled" name="productDfEnabled"> {{ copy('มี DF สำหรับสินค้านี้', 'Apply DF to this product') }}</label></div>
-        @if (productDraft.dfEnabled) { <label>DF<input type="number" min="0" max="100" step="0.01" [(ngModel)]="productDraft.dfPercent" name="productDfPercent" required><small>{{ copy('ระบุได้ตั้งแต่ 0–100%', 'Enter a value from 0–100%') }}</small></label> }
-      </div>
-      <div class="modal-actions"><button type="button" class="btn" (click)="closeProductForm()">{{ copy('ยกเลิก', 'Cancel') }}</button><button class="btn primary">{{ editingCode() ? copy('บันทึกการแก้ไข', 'Save changes') : copy('บันทึกสินค้า', 'Save product') }}</button></div>
-    </form>
-  </div>
+  <div class="modal-backdrop" (click)="closeProductForm()"><form class="product-modal" (ngSubmit)="saveProduct()" (click)="$event.stopPropagation()">
+    <div class="drawer-head"><div><p class="panel-kicker">{{ copy('ข้อมูลสินค้า', 'Product catalog') }}</p><h2>{{ editingCode() ? copy('แก้ไขสินค้า', 'Edit product') : copy('เพิ่มสินค้า', 'Add product') }}</h2></div><button type="button" (click)="closeProductForm()" [attr.aria-label]="copy('ปิด', 'Close')">×</button></div>
+    <div class="product-grid">
+      <label>{{ copy('รหัสสินค้า', 'Product code') }}<input [(ngModel)]="productDraft.code" name="productCode" [readonly]="editingCode() !== null" required></label>
+      <label>{{ copy('ชื่อสินค้า', 'Product name') }}<input [(ngModel)]="productDraft.name" name="productName" required></label>
+      <label>{{ copy('กลุ่มสินค้า', 'Product group') }}<select [(ngModel)]="productDraft.group" name="productGroup" required>@for (option of productGroups(); track option) { <option [value]="option">{{ option }}</option> }</select></label>
+      <label>{{ copy('ประเภท', 'Type') }}<select [(ngModel)]="productDraft.type" name="productType" required>@for (option of productTypes(); track option) { <option [value]="option">{{ option }}</option> }</select></label>
+      <label>{{ copy('ราคา', 'Price') }}<input type="number" min="0" [(ngModel)]="productDraft.price" name="productPrice" required></label>
+      <label class="checkbox-label"><input type="checkbox" [(ngModel)]="productDraft.active" name="productActive"> {{ copy('เปิดใช้งานสินค้า', 'Active product') }}</label>
+      <div class="df-toggle"><label class="checkbox-label"><input type="checkbox" [(ngModel)]="productDraft.dfEnabled" name="productDfEnabled"> {{ copy('มี DF สำหรับสินค้านี้', 'Apply DF to this product') }}</label></div>
+      @if (productDraft.dfEnabled) { <label>DF<input type="number" min="0" max="100" step="0.01" [(ngModel)]="productDraft.dfPercent" name="productDfPercent" required><small>{{ copy('ระบุได้ตั้งแต่ 0–100%', 'Enter a value from 0–100%') }}</small></label> }
+    </div>
+    <div class="modal-actions"><button type="button" class="btn" (click)="closeProductForm()">{{ copy('ยกเลิก', 'Cancel') }}</button><button class="btn confirm">{{ editingCode() ? copy('บันทึกการแก้ไข', 'Save changes') : copy('บันทึกสินค้า', 'Save product') }}</button></div>
+  </form></div>
 }
 
 @if (historyOpen()) {
-  <div class="modal-backdrop" (click)="historyOpen.set(false)">
-    <section class="history-modal" (click)="$event.stopPropagation()">
-      <div class="drawer-head"><div><p class="eyebrow">PRICE HISTORY</p><h2>{{ historyProduct()?.name }}</h2><small>{{ historyProduct()?.code }}</small></div><button (click)="historyOpen.set(false)" [attr.aria-label]="copy('ปิด', 'Close')">×</button></div>
-      @if (historyLoading()) { <p class="history-empty">{{ copy('กำลังโหลดประวัติ...', 'Loading history...') }}</p> }
-      @else { <div class="history-list">@for (item of priceHistory(); track $index) { <article><div><b>{{ item.previous_price | currency:'THB':'symbol-narrow':'1.0-0' }} → {{ item.new_price | currency:'THB':'symbol-narrow':'1.0-0' }}</b><small>{{ item.source === 'manual_edit' ? copy('แก้ไขราคา', 'Manual edit') : copy('ยืนยันกฎราคา', 'Price rule applied') }} · {{ item.changed_at | date:'dd/MM/yyyy HH:mm' }}</small></div></article> } @empty { <p class="history-empty">{{ copy('ยังไม่มีประวัติการเปลี่ยนราคา', 'No price history yet') }}</p> }</div> }
-    </section>
-  </div>
+  <div class="modal-backdrop" (click)="historyOpen.set(false)"><section class="history-modal" (click)="$event.stopPropagation()">
+    <div class="drawer-head"><div><p class="panel-kicker">{{ copy('ประวัติการเปลี่ยนราคา', 'Price history') }}</p><h2>{{ historyProduct()?.name }}</h2><small>{{ historyProduct()?.code }}</small></div><button type="button" (click)="historyOpen.set(false)" [attr.aria-label]="copy('ปิด', 'Close')">×</button></div>
+    @if (historyLoading()) { <p class="history-empty">{{ copy('กำลังโหลดประวัติ...', 'Loading history...') }}</p> } @else { <div class="history-list">@for (item of priceHistory(); track $index) { <article><div><b>{{ item.previous_price | currency:'THB':'symbol-narrow':'1.0-0' }} → {{ item.new_price | currency:'THB':'symbol-narrow':'1.0-0' }}</b><small>{{ item.source === 'manual_edit' ? copy('แก้ไขราคา', 'Manual edit') : copy('ยืนยันกฎราคา', 'Price rule applied') }} · {{ item.changed_at | date:'dd/MM/yyyy HH:mm' }}</small></div></article> } @empty { <p class="history-empty">{{ copy('ยังไม่มีประวัติการเปลี่ยนราคา', 'No price history yet') }}</p> }</div> }
+  </section></div>
 }

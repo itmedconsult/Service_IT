@@ -10,11 +10,26 @@ export interface PriceHistoryEntry {
   new_price: number;
   source: 'manual_edit' | 'rule_apply';
   changed_at?: string;
+  cost_snapshot?: number | null;
+  gross_margin_baht?: number | null;
+  override_name?: string | null;
+  override_reason?: string | null;
 }
+
+export interface ProductCost { product_code: string; cog: number; effective_at: string; }
+export interface CostImportRow { code: string; name: string; group: string; price: number | null; cog: number | null; }
+export interface CostImportResult { import_id: string; accepted_rows: number; invalid_rows: number; duplicate_rows: number; product_not_found_rows: number; }
 
 @Injectable({ providedIn: 'root' })
 export class SupabaseDataService {
   private readonly client = createClient(environment.supabaseUrl, environment.supabasePublishableKey);
+
+  private async ensureSession(): Promise<void> {
+    const { data } = await this.client.auth.getSession();
+    if (data.session) return;
+    const { error } = await this.client.auth.signInAnonymously();
+    if (error) throw error;
+  }
 
   async loadProducts(): Promise<Product[]> {
     // PostgREST limits a single response to 1,000 rows by default. Fetch every
@@ -92,13 +107,43 @@ export class SupabaseDataService {
     if (error) throw error;
   }
 
+  async loadCurrentCosts(): Promise<ProductCost[]> {
+    await this.ensureSession();
+    const { data, error } = await this.client.from('current_product_costs').select('product_code,cog,effective_at');
+    if (error) throw error;
+    return (data ?? []).map((row) => ({ ...row, cog: Number(row.cog) })) as ProductCost[];
+  }
+
+  async importCosts(fileName: string, importedBy: string, rows: readonly CostImportRow[]): Promise<CostImportResult> {
+    await this.ensureSession();
+    const { data, error } = await this.client.rpc('import_product_costs', {
+      p_file_name: fileName,
+      p_imported_by: importedBy,
+      p_rows: rows.map((row) => ({ ...row, price: row.price ?? '', cog: row.cog ?? '' })),
+    });
+    if (error) throw error;
+    const result = Array.isArray(data) ? data[0] : data;
+    return result as CostImportResult;
+  }
+
+  async applyPriceChanges(changes: readonly { code: string; newPrice: number; source: 'manual_edit' | 'rule_apply'; overrideName?: string; overrideReason?: string; }[]): Promise<void> {
+    await this.ensureSession();
+    const { error } = await this.client.rpc('apply_product_price_changes', {
+      p_changes: changes.map((change) => ({
+        code: change.code, new_price: change.newPrice, source: change.source,
+        override_name: change.overrideName ?? '', override_reason: change.overrideReason ?? '',
+      })),
+    });
+    if (error) throw error;
+  }
+
   async loadPriceHistory(productCode: string): Promise<PriceHistoryEntry[]> {
     const { data, error } = await this.client.from('price_history')
-      .select('product_code,previous_price,new_price,source,changed_at')
+      .select('product_code,previous_price,new_price,source,changed_at,cost_snapshot,gross_margin_baht,override_name,override_reason')
       .eq('product_code', productCode)
       .order('changed_at', { ascending: false });
     if (error) throw error;
-    return (data ?? []).map((entry) => ({ ...entry, previous_price: Number(entry.previous_price), new_price: Number(entry.new_price) })) as PriceHistoryEntry[];
+    return (data ?? []).map((entry) => ({ ...entry, previous_price: Number(entry.previous_price), new_price: Number(entry.new_price), cost_snapshot: entry.cost_snapshot === null ? null : Number(entry.cost_snapshot), gross_margin_baht: entry.gross_margin_baht === null ? null : Number(entry.gross_margin_baht) })) as PriceHistoryEntry[];
   }
 
   async deleteProducts(codes: readonly string[]): Promise<void> {

@@ -6,7 +6,7 @@ import type { Product } from '../../core/models/product.model';
 import type { PriceRule } from '../../core/models/price-rule.model';
 import { ProductStoreService } from '../../core/services/product-store.service';
 import { DoctorEasePriceService, DoctorEaseServicePrice } from '../../core/services/doctorease-price.service';
-import { PriceHistoryEntry, SupabaseDataService } from '../../core/services/supabase-data.service';
+import { CostImportRow, PriceHistoryEntry, ProductCost, SupabaseDataService } from '../../core/services/supabase-data.service';
 import { PriceRuleStoreService } from '../../core/services/price-rule-store.service';
 import { SAMPLE_PRODUCTS } from './data/sample-products';
 import { DOCTOREASE_GROUPS, DOCTOREASE_TYPES } from './data/doctorease-options';
@@ -31,8 +31,10 @@ export class PriceControlPageComponent implements OnInit {
 
   readonly products = signal<Product[]>(this.productStore.load(SAMPLE_PRODUCTS));
   readonly query = signal('');
+  readonly priceFilter = signal<number | null>(null);
   readonly group = signal('ทั้งหมด');
   readonly priceStatusFilter = signal<'all' | 'different' | 'match' | 'missing' | 'pending'>('all');
+  readonly costStatusFilter = signal<'all' | 'below_cog' | 'ok' | 'missing_cog'>('all');
   readonly page = signal(1);
   readonly open = signal(false);
   readonly productFormOpen = signal(false);
@@ -45,6 +47,15 @@ export class PriceControlPageComponent implements OnInit {
   readonly doctorEasePrices = signal<ReadonlyMap<string, DoctorEaseServicePrice>>(new Map());
   readonly doctorEaseChecking = signal(false);
   readonly importMessage = signal('');
+  readonly costByCode = signal<ReadonlyMap<string, ProductCost>>(new Map());
+  readonly costImportPreview = signal<CostImportRow[] | null>(null);
+  readonly costImportFileName = signal('');
+  readonly costImportOpen = signal(false);
+  readonly costImporting = signal(false);
+  readonly approvalOpen = signal(false);
+  readonly approvalName = signal('');
+  readonly approvalReason = signal('');
+  readonly pendingPriceChanges = signal<Array<{ code: string; newPrice: number; source: 'manual_edit' | 'rule_apply' }>>([]);
   readonly syncMessage = signal('กำลังเชื่อมต่อ Supabase...');
   readonly rules = signal<PriceRule[]>(this.ruleStore.load());
 
@@ -56,10 +67,13 @@ export class PriceControlPageComponent implements OnInit {
   readonly productTypes = computed(() => [...new Set([...DOCTOREASE_TYPES, ...this.products().map((product) => product.type)])]);
   readonly filtered = computed(() => this.products().filter((product) => {
     const matchesGroup = this.group() === 'ทั้งหมด' || this.group() === product.group;
+    const matchesPrice = this.priceFilter() === null || product.price === this.priceFilter();
     const matchesPriceStatus = this.priceStatusFilter() === 'all' || this.doctorEaseStatus(product) === this.priceStatusFilter();
     const searchTarget = `${product.code} ${product.name}`.toLowerCase();
-    return matchesGroup && matchesPriceStatus && searchTarget.includes(this.query().toLowerCase());
+    const matchesCostStatus = this.costStatusFilter() === 'all' || this.costStatus(product) === this.costStatusFilter();
+    return matchesGroup && matchesPrice && matchesPriceStatus && matchesCostStatus && searchTarget.includes(this.query().toLowerCase());
   }));
+  readonly belowCostCount = computed(() => this.products().filter((product) => this.costStatus(product) === 'below_cog').length);
   readonly changed = computed(() => this.products().filter((product) => this.price(product) !== product.price));
   readonly totalPages = computed(() => Math.max(1, Math.ceil(this.filtered().length / this.pageSize)));
   readonly pagedProducts = computed(() => {
@@ -96,12 +110,19 @@ export class PriceControlPageComponent implements OnInit {
 
   setQuery(value: string): void { this.query.set(value); this.page.set(1); }
 
+  setPriceFilter(value: number | string | null): void {
+    const price = value === null || value === '' ? null : Number(value);
+    this.priceFilter.set(price !== null && Number.isFinite(price) && price >= 0 ? price : null);
+    this.page.set(1);
+  }
+
   setGroup(value: string): void { this.group.set(value); this.page.set(1); }
 
   setPriceStatusFilter(value: 'all' | 'different' | 'match' | 'missing' | 'pending'): void {
     this.priceStatusFilter.set(value);
     this.page.set(1);
   }
+  setCostStatusFilter(value: 'all' | 'below_cog' | 'ok' | 'missing_cog'): void { this.costStatusFilter.set(value); this.page.set(1); }
 
   changePage(page: number): void { this.page.set(Math.max(1, Math.min(page, this.totalPages()))); }
 
@@ -135,6 +156,14 @@ export class PriceControlPageComponent implements OnInit {
 
   doctorEasePrice(product: Product): number | null {
     return this.doctorEasePrices().get(product.code.toLowerCase())?.price ?? null;
+  }
+
+  cost(product: Product): number | null { return this.costByCode().get(product.code.toLowerCase())?.cog ?? null; }
+  grossMargin(product: Product): number | null { const cost = this.cost(product); return cost === null ? null : product.price - cost; }
+  marginPercent(product: Product): number | null { const cost = this.cost(product); return cost === null || product.price === 0 ? null : ((product.price - cost) / product.price) * 100; }
+  costStatus(product: Product): 'below_cog' | 'ok' | 'missing_cog' {
+    const cost = this.cost(product);
+    return cost === null ? 'missing_cog' : product.price < cost ? 'below_cog' : 'ok';
   }
 
   toggleProductSelection(code: string): void {
@@ -201,19 +230,77 @@ export class PriceControlPageComponent implements OnInit {
   }
 
   async apply(): Promise<void> {
-    const history = this.products().flatMap((product) => {
+    const changes = this.products().flatMap((product) => {
       const newPrice = this.price(product);
-      return newPrice === product.price ? [] : [{ product_code: product.code, previous_price: product.price, new_price: newPrice, source: 'rule_apply' as const }];
+      return newPrice === product.price ? [] : [{ code: product.code, newPrice, source: 'rule_apply' as const }];
     });
-    this.products.update((products) => products.map((product) => ({
-      ...product,
-      price: this.price(product),
-    })));
-    this.persistProducts();
-    if (await this.syncProducts('อัปเดตราคาขึ้น Supabase แล้ว')) await this.savePriceHistory(history);
+    await this.requestPriceChanges(changes);
   }
 
   openImport(input: HTMLInputElement): void { input.click(); }
+
+  openCostImport(input: HTMLInputElement): void { input.click(); }
+
+  async previewCostImport(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const found = workbook.SheetNames.map((name) => {
+        const sheet = workbook.Sheets[name];
+        const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', blankrows: false });
+        const headerIndex = raw.findIndex((row) => this.isCostHeader(row));
+        // sheet_to_json omits leading blank rows. Convert its index back to the
+        // worksheet's physical row before using it as the header range.
+        const startRow = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s.r + headerIndex : headerIndex;
+        return { sheet, headerIndex, startRow };
+      }).find((candidate) => candidate.headerIndex >= 0);
+      if (!found) throw new Error('ไม่พบตาราง Code / Name / COG');
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(found.sheet, { range: found.startRow, defval: '' });
+      const preview = rows.map((row) => this.toCostRow(row)).filter((row): row is CostImportRow => row !== null);
+      if (!preview.length) throw new Error('ไม่มีข้อมูล COG');
+      this.costImportPreview.set(preview);
+      this.costImportFileName.set(file.name);
+      this.costImportOpen.set(true);
+    } catch {
+      this.importMessage.set(this.copy('นำเข้าต้นทุนไม่สำเร็จ: ต้องมีคอลัมน์ Code, Name และ COG', 'Cost import failed: Code, Name, and COG columns are required'));
+    } finally { input.value = ''; }
+  }
+
+  costPreviewSummary(): { valid: number; invalid: number; duplicates: number; missing: number } {
+    const rows = this.costImportPreview() ?? [];
+    const knownCodes = new Set(this.products().map((product) => product.code.toLowerCase()));
+    const seen = new Set<string>();
+    return rows.reduce((summary, row) => {
+      if (row.cog === null || row.cog < 0) summary.invalid++;
+      else if (seen.has(row.code.toLowerCase())) summary.duplicates++;
+      else if (!knownCodes.has(row.code.toLowerCase())) { summary.missing++; seen.add(row.code.toLowerCase()); }
+      else { summary.valid++; seen.add(row.code.toLowerCase()); }
+      return summary;
+    }, { valid: 0, invalid: 0, duplicates: 0, missing: 0 });
+  }
+
+  async confirmCostImport(): Promise<void> {
+    const rows = this.costImportPreview();
+    if (!rows?.length) return;
+    this.costImporting.set(true);
+    try {
+      const result = await this.supabase.importCosts(this.costImportFileName(), '', rows);
+      await this.loadCosts();
+      this.costImportOpen.set(false);
+      this.costImportPreview.set(null);
+      this.importMessage.set(this.copy(`อัปเดต COG ${result.accepted_rows} รายการ; ข้ามข้อมูลผิด ${result.invalid_rows}, รหัสซ้ำ ${result.duplicate_rows}, ไม่พบสินค้า ${result.product_not_found_rows}`, `Updated COG for ${result.accepted_rows}; skipped ${result.invalid_rows} invalid, ${result.duplicate_rows} duplicates, and ${result.product_not_found_rows} unmatched rows`));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      const anonymousDisabled = message.includes('anonymous_provider_disabled') || message.includes('Anonymous sign-ins are disabled');
+      this.costImportOpen.set(false);
+      this.costImportPreview.set(null);
+      this.importMessage.set(anonymousDisabled
+        ? this.copy('บันทึกต้นทุนไม่ได้ — โปรดเปิด Anonymous Sign-ins ใน Supabase ก่อน', 'Could not save COG — enable Anonymous Sign-ins in Supabase first')
+        : this.copy('บันทึกต้นทุนไม่สำเร็จ — กรุณาตรวจสอบ migration และสิทธิ์ Supabase', 'Could not save COG — check the Supabase migration and permissions'));
+    } finally { this.costImporting.set(false); }
+  }
 
   async importExcel(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
@@ -313,6 +400,14 @@ export class PriceControlPageComponent implements OnInit {
     if (!isEditing && this.products().some((item) => item.code.toLowerCase() === product.code.toLowerCase())) {
       this.importMessage.set(this.copy(`ไม่สามารถเพิ่มได้: พบรหัสสินค้า ${product.code} แล้ว`, `Cannot add: product code ${product.code} already exists`)); return;
     }
+    if (previous && previous.price !== product.price) {
+      await this.requestPriceChanges([{ code: product.code, newPrice: product.price, source: 'manual_edit' }], product);
+      return;
+    }
+    await this.saveProductCatalog(product, isEditing);
+  }
+
+  private async saveProductCatalog(product: Product, isEditing: boolean): Promise<void> {
     this.products.update((products) => isEditing
       ? products.map((item) => item.code === this.editingCode() ? product : item)
       : [...products, product]);
@@ -320,12 +415,8 @@ export class PriceControlPageComponent implements OnInit {
     this.page.set(this.totalPages());
     this.productDraft = this.createEmptyProduct();
     this.closeProductForm();
-    this.importMessage.set(isEditing
-      ? this.copy('แก้ไขสินค้าเรียบร้อย', 'Product updated')
-      : this.copy('เพิ่มสินค้าเรียบร้อย', 'Product added'));
-    if (await this.syncProducts() && previous && previous.price !== product.price) {
-      await this.savePriceHistory([{ product_code: product.code, previous_price: previous.price, new_price: product.price, source: 'manual_edit' }]);
-    }
+    this.importMessage.set(isEditing ? this.copy('แก้ไขสินค้าเรียบร้อย', 'Product updated') : this.copy('เพิ่มสินค้าเรียบร้อย', 'Product added'));
+    await this.syncProducts();
   }
 
   private persistRules(): void {
@@ -349,6 +440,7 @@ export class PriceControlPageComponent implements OnInit {
       } else {
         await this.supabase.upsertProducts(this.products());
       }
+      await this.loadCosts();
       if (rules.length) {
         this.rules.set(rules);
         this.persistRules();
@@ -383,6 +475,69 @@ export class PriceControlPageComponent implements OnInit {
     }
   }
 
+  private async loadCosts(): Promise<void> {
+    try {
+      const costs = await this.supabase.loadCurrentCosts();
+      this.costByCode.set(new Map(costs.map((cost) => [cost.product_code.toLowerCase(), cost])));
+    } catch {
+      // The cost migration may not have been applied yet. Keep price control usable,
+      // but prevent price changes until a current COG can be loaded.
+      this.costByCode.set(new Map());
+    }
+  }
+
+  private async requestPriceChanges(changes: Array<{ code: string; newPrice: number; source: 'manual_edit' | 'rule_apply' }>, productToSave?: Product): Promise<void> {
+    if (!changes.length) return;
+    const missing = changes.find((change) => !this.costByCode().has(change.code.toLowerCase()));
+    if (missing) {
+      this.importMessage.set(this.copy(`ยังไม่มี COG สำหรับ ${missing.code}; กรุณานำเข้าต้นทุนก่อนบันทึกราคา`, `COG is missing for ${missing.code}; import costs before saving a price`));
+      return;
+    }
+    const belowCost = changes.some((change) => change.newPrice < (this.costByCode().get(change.code.toLowerCase())?.cog ?? Infinity));
+    this.pendingPriceChanges.set(changes);
+    this.pendingProductSave = productToSave ?? null;
+    if (belowCost) {
+      this.approvalName.set('');
+      this.approvalReason.set('');
+      this.approvalOpen.set(true);
+      return;
+    }
+    await this.commitPriceChanges();
+  }
+
+  async confirmPriceOverride(): Promise<void> {
+    if (!this.approvalName().trim() || !this.approvalReason().trim()) return;
+    await this.commitPriceChanges();
+  }
+
+  private pendingProductSave: Product | null = null;
+
+  private async commitPriceChanges(): Promise<void> {
+    const changes = this.pendingPriceChanges();
+    const belowCost = changes.some((change) => change.newPrice < (this.costByCode().get(change.code.toLowerCase())?.cog ?? Infinity));
+    try {
+      await this.supabase.applyPriceChanges(changes.map((change) => ({
+        ...change,
+        overrideName: belowCost ? this.approvalName().trim() : undefined,
+        overrideReason: belowCost ? this.approvalReason().trim() : undefined,
+      })));
+      if (this.pendingProductSave) {
+        const product = this.pendingProductSave;
+        await this.saveProductCatalog(product, true);
+      } else {
+        const nextPrices = new Map(changes.map((change) => [change.code.toLowerCase(), change.newPrice]));
+        this.products.update((products) => products.map((product) => ({ ...product, price: nextPrices.get(product.code.toLowerCase()) ?? product.price })));
+        this.persistProducts();
+        this.syncMessage.set(this.copy('อัปเดตราคาขึ้น Supabase แล้ว', 'Prices updated in Supabase'));
+      }
+      this.approvalOpen.set(false);
+      this.pendingPriceChanges.set([]);
+      this.pendingProductSave = null;
+    } catch {
+      this.importMessage.set(this.copy('บันทึกราคาไม่สำเร็จ — ตรวจสอบ COG และ migration ของ Supabase', 'Could not save price — check COG data and the Supabase migration'));
+    }
+  }
+
   private createEmptyProduct(): Product { return { code: '', name: '', group: 'Filler', type: 'Operatives/Lab', price: 0, active: true, dfEnabled: false, dfPercent: null }; }
 
   private toProduct(row: Record<string, unknown>): Product | null {
@@ -412,12 +567,43 @@ export class PriceControlPageComponent implements OnInit {
     };
   }
 
+  private toCostRow(row: Record<string, unknown>): CostImportRow | null {
+    // Some source sheets have repeated display labels (for example a second,
+    // empty "COG" column). Preserve the first non-empty value after normalizing.
+    const normalized = Object.entries(row).reduce<Record<string, unknown>>((result, [key, rawValue]) => {
+      const normalizedKey = key.trim().toLowerCase().replace(/[^a-z0-9ก-๙]/g, '');
+      if (result[normalizedKey] === undefined || String(result[normalizedKey]).trim() === '') result[normalizedKey] = rawValue;
+      return result;
+    }, {});
+    const value = (...keys: string[]) => keys.map((key) => normalized[key.trim().toLowerCase().replace(/[^a-z0-9ก-๙]/g, '')]).find((item) => item !== undefined && String(item).trim() !== '');
+    const code = String(value('code', 'รหัสสินค้า') ?? '').trim();
+    if (!code) return null;
+    const numberValue = (raw: unknown): number | null => {
+      if (raw === null || raw === undefined || String(raw).trim() === '') return null;
+      const parsed = Number(String(raw ?? '').replace(/,/g, '').replace(/฿/g, ''));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    return {
+      code,
+      name: String(value('name', 'ชื่อสินค้า') ?? '').trim(),
+      group: String(value('group', 'กลุ่ม') ?? '').trim(),
+      price: numberValue(value('price', 'ราคา')),
+      cog: numberValue(value('cog', 'cost', 'ต้นทุน')),
+    };
+  }
+
   private isProductHeader(row: unknown[]): boolean {
     const headers = row.map((value) => String(value).trim().toLowerCase().replace(/[^a-z0-9ก-๙]/g, ''));
     const has = (...names: string[]) => names.some((name) => headers.includes(name));
     return has('code', 'รหัสสินค้า', 'productcode', 'servicecode')
       && has('name', 'ชื่อสินค้า', 'productname', 'servicename')
       && has('price', 'ราคา', 'productprice');
+  }
+
+  private isCostHeader(row: unknown[]): boolean {
+    const headers = row.map((value) => String(value).trim().toLowerCase().replace(/[^a-z0-9ก-๙]/g, ''));
+    const has = (...names: string[]) => names.some((name) => headers.includes(name));
+    return has('code', 'รหัสสินค้า') && has('name', 'ชื่อสินค้า') && has('cog', 'cost', 'ต้นทุน');
   }
 
   private dedupeProducts(products: readonly Product[]): Product[] {
