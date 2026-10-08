@@ -527,8 +527,8 @@ export class PriceControlPageComponent implements OnInit {
       const costs = await this.supabase.loadCurrentCosts();
       this.costByCode.set(new Map(costs.map((cost) => [cost.product_code.toLowerCase(), cost])));
     } catch {
-      // The cost migration may not have been applied yet. Keep price control usable,
-      // but prevent price changes until a current COG can be loaded.
+      // Keep price control usable when the cost migration is unavailable. Products
+      // with a known COG still use the below-cost approval workflow.
       this.costByCode.set(new Map());
     }
   }
@@ -539,12 +539,10 @@ export class PriceControlPageComponent implements OnInit {
       this.importMessage.set(this.copy('กรุณาเข้าสู่ระบบด้วยบัญชี Admin ก่อนเปลี่ยนราคา', 'Sign in with an Admin account before changing prices'));
       return;
     }
-    const missing = changes.find((change) => !this.costByCode().has(change.code.toLowerCase()));
-    if (missing) {
-      this.importMessage.set(this.copy(`ยังไม่มี COG สำหรับ ${missing.code}; กรุณานำเข้าต้นทุนก่อนบันทึกราคา`, `COG is missing for ${missing.code}; import costs before saving a price`));
-      return;
-    }
-    const belowCost = changes.some((change) => change.newPrice < (this.costByCode().get(change.code.toLowerCase())?.cog ?? Infinity));
+    const belowCost = changes.some((change) => {
+      const cog = this.costByCode().get(change.code.toLowerCase())?.cog;
+      return cog !== undefined && change.newPrice < cog;
+    });
     this.pendingPriceChanges.set(changes);
     this.pendingProductSave = productToSave ?? null;
     if (belowCost) {
@@ -565,7 +563,10 @@ export class PriceControlPageComponent implements OnInit {
 
   private async commitPriceChanges(): Promise<void> {
     const changes = this.pendingPriceChanges();
-    const belowCost = changes.some((change) => change.newPrice < (this.costByCode().get(change.code.toLowerCase())?.cog ?? Infinity));
+    const belowCost = changes.some((change) => {
+      const cog = this.costByCode().get(change.code.toLowerCase())?.cog;
+      return cog !== undefined && change.newPrice < cog;
+    });
     const accessToken = this.supabase.session()?.access_token;
     if (!accessToken || !this.supabase.canManagePrices()) {
       this.importMessage.set(this.copy('เซสชัน Admin หมดอายุ กรุณาเข้าสู่ระบบใหม่', 'Admin session expired. Please sign in again'));
@@ -577,12 +578,25 @@ export class PriceControlPageComponent implements OnInit {
         changes.map((change) => ({ code: change.code, price: change.newPrice })),
         accessToken,
       );
+      const changesWithCost = changes.filter((change) => this.costByCode().has(change.code.toLowerCase()));
+      const changesWithoutCost = changes.filter((change) => !this.costByCode().has(change.code.toLowerCase()));
       try {
-        await this.supabase.applyPriceChanges(changes.map((change) => ({
+        if (changesWithCost.length) await this.supabase.applyPriceChanges(changesWithCost.map((change) => ({
           ...change,
           overrideName: belowCost ? this.approvalName().trim() : undefined,
           overrideReason: belowCost ? this.approvalReason().trim() : undefined,
         })));
+        if (changesWithoutCost.length) {
+          const previousPrices = new Map(this.products().map((product) => [product.code.toLowerCase(), product.price]));
+          await this.supabase.addPriceHistory(changesWithoutCost.map((change) => ({
+            product_code: change.code,
+            previous_price: previousPrices.get(change.code.toLowerCase()) ?? change.newPrice,
+            new_price: change.newPrice,
+            source: change.source,
+            cost_snapshot: null,
+            gross_margin_baht: null,
+          })));
+        }
       } catch {
         this.importMessage.set(this.copy('ราคาไปถึง WordPress/ACF แล้ว แต่บันทึกประวัติ Supabase ไม่สำเร็จ', 'WordPress/ACF was updated, but Supabase history could not be recorded'));
       }
