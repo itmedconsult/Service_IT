@@ -1,5 +1,5 @@
-import { Injectable } from '@angular/core';
-import { createClient } from '@supabase/supabase-js';
+import { computed, Injectable, signal } from '@angular/core';
+import { createClient, type Session } from '@supabase/supabase-js';
 import type { Product } from '../models/product.model';
 import type { PriceRule } from '../models/price-rule.model';
 import { environment } from '../../../environments/environment';
@@ -23,6 +23,48 @@ export interface CostImportResult { import_id: string; accepted_rows: number; in
 @Injectable({ providedIn: 'root' })
 export class SupabaseDataService {
   private readonly client = createClient(environment.supabaseUrl, environment.supabasePublishableKey);
+  readonly session = signal<Session | null>(null);
+  readonly authReady = signal(false);
+  readonly email = computed(() => this.session()?.user.email ?? '');
+  readonly role = computed(() => {
+    const metadata = this.session()?.user.app_metadata ?? {};
+    return typeof metadata['role'] === 'string' ? metadata['role'] : '';
+  });
+  readonly canManagePrices = computed(() => ['admin', 'price_admin'].includes(this.role()));
+
+  constructor() {
+    void this.restoreSession();
+    this.client.auth.onAuthStateChange((_event, session) => {
+      this.session.set(session);
+      this.authReady.set(true);
+    });
+  }
+
+  async signIn(email: string, password: string): Promise<void> {
+    const { data, error } = await this.client.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    this.session.set(data.session);
+  }
+
+  async sendMagicLink(email: string): Promise<void> {
+    const { error } = await this.client.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    if (error) throw error;
+  }
+
+  async signOut(): Promise<void> {
+    const { error } = await this.client.auth.signOut();
+    if (error) throw error;
+    this.session.set(null);
+  }
+
+  private async restoreSession(): Promise<void> {
+    const { data, error } = await this.client.auth.getSession();
+    if (!error) this.session.set(data.session);
+    this.authReady.set(true);
+  }
 
   private async ensureSession(): Promise<void> {
     const { data } = await this.client.auth.getSession();

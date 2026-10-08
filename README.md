@@ -1,21 +1,38 @@
 # DoctorEase Price Control
 
-เว็บแอปสำหรับตรวจสอบรายการสินค้า ตั้งกฎราคา และส่งราคาใหม่กลับไปยัง DoctorEase
+เว็บแอป Angular สำหรับดูสินค้าจริงจาก Supabase สร้างกฎปรับราคา และส่งราคาที่อนุมัติผ่าน WordPress Price Sync gateway เพื่ออัปเดตทั้ง `public.products` และ ACF `service_product` ในคำขอเดียว
 
-## เริ่มใช้งาน
-
-1. คัดลอก `.env.example` เป็น `.env`
-2. ใส่ `DOCTOREASE_API_KEY` ใน `.env` (ห้ามนำ key ไปใส่ใน `VITE_*` หรือ commit)
-3. ยืนยัน endpoint สำหรับอ่านรายการและบันทึกราคาจากเอกสาร API ของ DoctorEase แล้วแก้ `DOCTOREASE_PRODUCTS_PATH` และ `DOCTOREASE_PRICE_UPDATE_PATH`
-4. เปิดสอง terminal:
+## เริ่มใช้งานในเครื่อง
 
 ```sh
-npm run server
-npm run dev
+npm install
+npm start
 ```
 
-ระบบหน้าเว็บจะรีเฟรชข้อมูลทุก 30 วินาที (แก้ได้ที่ `VITE_REFRESH_SECONDS`) และเมื่อกดบันทึก จะส่ง `PUT /api/products/:code/price` ผ่าน proxy โดยมี JSON `{ "price": 1234 }`.
+เปิด `http://localhost:4200` รายการสินค้าสามารถดูได้โดยไม่ต้องล็อกอิน ส่วนการยืนยันราคาต้องล็อกอิน Supabase ด้วยบัญชีที่มี `app_metadata.role` เป็น `admin` หรือ `price_admin`
 
-## จุดที่ต้องยืนยันกับ API
+ค่าปลายทางสาธารณะอยู่ใน `src/environments/environment.ts`:
 
-หน้า `List_Heal` เป็นหน้าจอรายการ ไม่ใช่เอกสาร endpoint API จึงยังไม่ควรเดารูปแบบคำขอสำหรับเขียนข้อมูลจริง. Proxy รองรับการกำหนด path จาก `.env` แล้ว; หาก API ใช้ header, method หรือ payload ต่างจากตัวอย่าง ให้ปรับเฉพาะ `server.mjs` โดย API key ยังคงอยู่ฝั่งเซิร์ฟเวอร์.
+- Supabase project URL
+- Supabase publishable key ซึ่งใช้ร่วมกับ RLS
+- WordPress base URL
+
+ห้ามนำ Supabase secret key หรือ `service_role` มาใส่ใน frontend
+
+## เส้นทางการอัปเดตราคา
+
+1. เว็บแอปโหลด `products` จาก Supabase
+2. Admin สร้างกฎราคาและกดยืนยัน
+3. เว็บแอปส่ง Supabase access token ไปยัง WordPress REST API
+4. ปลั๊กอินตรวจ token และ role จาก `app_metadata`
+5. ปลั๊กอินอัปเดต Supabase ภายใต้ RLS แล้ว mirror ราคาไปยัง WordPress/ACF
+6. เว็บแอปโหลดข้อมูลใหม่และแสดงผลสำเร็จ
+
+รายละเอียด endpoint และตัวอย่างเรียกใช้อยู่ใน `docs/WORDPRESS_PRICE_SYNC.md`
+
+## ตรวจสอบ
+
+```sh
+npm test
+npm run build
+```

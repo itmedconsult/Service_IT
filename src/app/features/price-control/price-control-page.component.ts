@@ -7,6 +7,7 @@ import type { PriceRule } from '../../core/models/price-rule.model';
 import { ProductStoreService } from '../../core/services/product-store.service';
 import { DoctorEasePriceService, DoctorEaseServicePrice } from '../../core/services/doctorease-price.service';
 import { CostImportRow, PriceHistoryEntry, ProductCost, SupabaseDataService } from '../../core/services/supabase-data.service';
+import { WordPressPriceGatewayService } from '../../core/services/wordpress-price-gateway.service';
 import { PriceRuleStoreService } from '../../core/services/price-rule-store.service';
 import { SAMPLE_PRODUCTS } from './data/sample-products';
 import { DOCTOREASE_GROUPS, DOCTOREASE_TYPES } from './data/doctorease-options';
@@ -25,6 +26,7 @@ export class PriceControlPageComponent implements OnInit {
   private readonly productStore = inject(ProductStoreService);
   private readonly doctorEase = inject(DoctorEasePriceService);
   private readonly supabase = inject(SupabaseDataService);
+  private readonly wordpressGateway = inject(WordPressPriceGatewayService);
 
   readonly language = signal<'th' | 'en'>('th');
   readonly theme = signal<'light' | 'dark'>('light');
@@ -57,10 +59,17 @@ export class PriceControlPageComponent implements OnInit {
   readonly approvalReason = signal('');
   readonly pendingPriceChanges = signal<Array<{ code: string; newPrice: number; source: 'manual_edit' | 'rule_apply' }>>([]);
   readonly syncMessage = signal('กำลังเชื่อมต่อ Supabase...');
+  readonly applyingPrices = signal(false);
+  readonly loggingIn = signal(false);
+  readonly authMessage = signal('');
   readonly rules = signal<PriceRule[]>(this.ruleStore.load());
 
   draft: Omit<PriceRule, 'id'> = this.createEmptyDraft();
   productDraft: Product = this.createEmptyProduct();
+  loginEmail = 'it@medconsultasia.com';
+  loginPassword = '';
+
+  readonly auth = this.supabase;
 
   readonly groups = computed(() => ['ทั้งหมด', ...new Set(this.products().map((product) => product.group))]);
   readonly productGroups = computed(() => [...new Set([...DOCTOREASE_GROUPS, ...this.products().map((product) => product.group)])]);
@@ -102,6 +111,44 @@ export class PriceControlPageComponent implements OnInit {
     localStorage.setItem('price-control-theme', theme);
     document.documentElement.dataset['theme'] = theme;
     document.documentElement.style.colorScheme = theme;
+  }
+
+  async signIn(): Promise<void> {
+    if (!this.loginEmail.trim() || !this.loginPassword) return;
+    this.loggingIn.set(true);
+    this.authMessage.set('');
+    try {
+      await this.supabase.signIn(this.loginEmail.trim(), this.loginPassword);
+      this.loginPassword = '';
+      if (!this.supabase.canManagePrices()) {
+        this.authMessage.set(this.copy('บัญชีนี้ไม่มีสิทธิ์จัดการราคา', 'This account cannot manage prices'));
+      } else {
+        this.authMessage.set(this.copy('เข้าสู่ระบบแล้ว พร้อมซิงก์ WordPress/ACF', 'Signed in and ready to sync WordPress/ACF'));
+      }
+    } catch (error) {
+      this.authMessage.set(error instanceof Error ? error.message : this.copy('เข้าสู่ระบบไม่สำเร็จ', 'Sign-in failed'));
+    } finally {
+      this.loggingIn.set(false);
+    }
+  }
+
+  async sendMagicLink(): Promise<void> {
+    if (!this.loginEmail.trim()) return;
+    this.loggingIn.set(true);
+    this.authMessage.set('');
+    try {
+      await this.supabase.sendMagicLink(this.loginEmail.trim());
+      this.authMessage.set(this.copy('ส่งลิงก์เข้าสู่ระบบไปที่อีเมลแล้ว', 'A sign-in link has been sent to your email'));
+    } catch (error) {
+      this.authMessage.set(error instanceof Error ? error.message : this.copy('ส่งลิงก์ไม่สำเร็จ', 'Could not send the sign-in link'));
+    } finally {
+      this.loggingIn.set(false);
+    }
+  }
+
+  async signOut(): Promise<void> {
+    await this.supabase.signOut();
+    this.authMessage.set(this.copy('ออกจากระบบแล้ว', 'Signed out'));
   }
 
   copy(thai: string, english: string): string {
@@ -488,6 +535,10 @@ export class PriceControlPageComponent implements OnInit {
 
   private async requestPriceChanges(changes: Array<{ code: string; newPrice: number; source: 'manual_edit' | 'rule_apply' }>, productToSave?: Product): Promise<void> {
     if (!changes.length) return;
+    if (!this.supabase.canManagePrices()) {
+      this.importMessage.set(this.copy('กรุณาเข้าสู่ระบบด้วยบัญชี Admin ก่อนเปลี่ยนราคา', 'Sign in with an Admin account before changing prices'));
+      return;
+    }
     const missing = changes.find((change) => !this.costByCode().has(change.code.toLowerCase()));
     if (missing) {
       this.importMessage.set(this.copy(`ยังไม่มี COG สำหรับ ${missing.code}; กรุณานำเข้าต้นทุนก่อนบันทึกราคา`, `COG is missing for ${missing.code}; import costs before saving a price`));
@@ -515,12 +566,26 @@ export class PriceControlPageComponent implements OnInit {
   private async commitPriceChanges(): Promise<void> {
     const changes = this.pendingPriceChanges();
     const belowCost = changes.some((change) => change.newPrice < (this.costByCode().get(change.code.toLowerCase())?.cog ?? Infinity));
+    const accessToken = this.supabase.session()?.access_token;
+    if (!accessToken || !this.supabase.canManagePrices()) {
+      this.importMessage.set(this.copy('เซสชัน Admin หมดอายุ กรุณาเข้าสู่ระบบใหม่', 'Admin session expired. Please sign in again'));
+      return;
+    }
+    this.applyingPrices.set(true);
     try {
-      await this.supabase.applyPriceChanges(changes.map((change) => ({
-        ...change,
-        overrideName: belowCost ? this.approvalName().trim() : undefined,
-        overrideReason: belowCost ? this.approvalReason().trim() : undefined,
-      })));
+      await this.wordpressGateway.updatePrices(
+        changes.map((change) => ({ code: change.code, price: change.newPrice })),
+        accessToken,
+      );
+      try {
+        await this.supabase.applyPriceChanges(changes.map((change) => ({
+          ...change,
+          overrideName: belowCost ? this.approvalName().trim() : undefined,
+          overrideReason: belowCost ? this.approvalReason().trim() : undefined,
+        })));
+      } catch {
+        this.importMessage.set(this.copy('ราคาไปถึง WordPress/ACF แล้ว แต่บันทึกประวัติ Supabase ไม่สำเร็จ', 'WordPress/ACF was updated, but Supabase history could not be recorded'));
+      }
       if (this.pendingProductSave) {
         const product = this.pendingProductSave;
         await this.saveProductCatalog(product, true);
@@ -528,13 +593,15 @@ export class PriceControlPageComponent implements OnInit {
         const nextPrices = new Map(changes.map((change) => [change.code.toLowerCase(), change.newPrice]));
         this.products.update((products) => products.map((product) => ({ ...product, price: nextPrices.get(product.code.toLowerCase()) ?? product.price })));
         this.persistProducts();
-        this.syncMessage.set(this.copy('อัปเดตราคาขึ้น Supabase แล้ว', 'Prices updated in Supabase'));
+        this.syncMessage.set(this.copy('อัปเดตราคาไปยัง Supabase และ WordPress/ACF แล้ว', 'Prices updated in Supabase and WordPress/ACF'));
       }
       this.approvalOpen.set(false);
       this.pendingPriceChanges.set([]);
       this.pendingProductSave = null;
-    } catch {
-      this.importMessage.set(this.copy('บันทึกราคาไม่สำเร็จ — ตรวจสอบ COG และ migration ของ Supabase', 'Could not save price — check COG data and the Supabase migration'));
+    } catch (error) {
+      this.importMessage.set(error instanceof Error ? error.message : this.copy('บันทึกราคาไปยัง WordPress/ACF ไม่สำเร็จ', 'Could not update WordPress/ACF'));
+    } finally {
+      this.applyingPrices.set(false);
     }
   }
 

@@ -9,6 +9,10 @@
       </div>
     </div>
     <div class="preferences" [attr.aria-label]="copy('การตั้งค่าการแสดงผล', 'Display preferences')">
+      @if (auth.canManagePrices()) {
+        <span class="admin-chip">{{ auth.email() }}</span>
+        <button type="button" class="sign-out" (click)="signOut()">{{ copy('ออกจากระบบ', 'Sign out') }}</button>
+      }
       <div class="language-switch" role="group" [attr.aria-label]="copy('เลือกภาษา', 'Choose language')">
         <button type="button" [class.active]="language() === 'th'" [attr.aria-pressed]="language() === 'th'" (click)="setLanguage('th')">ไทย</button>
         <button type="button" [class.active]="language() === 'en'" [attr.aria-pressed]="language() === 'en'" (click)="setLanguage('en')">EN</button>
@@ -20,9 +24,28 @@
     </div>
   </header>
 
+  @if (!auth.canManagePrices()) {
+    <section class="auth-panel" aria-labelledby="auth-title">
+      <div>
+        <p class="panel-kicker">WordPress Price Sync</p>
+        <h2 id="auth-title">{{ copy('เข้าสู่ระบบ Admin เพื่อเปลี่ยนราคาเว็บไซต์', 'Admin sign-in is required to change website prices') }}</h2>
+        <p>{{ copy('ดูรายการได้ตามปกติ แต่การยืนยันราคาจะส่งไปทั้ง Supabase และ WordPress/ACF เฉพาะบัญชี Admin', 'You can browse normally. Confirmed prices sync to both Supabase and WordPress/ACF for Admin accounts only.') }}</p>
+      </div>
+      <form class="auth-form" (ngSubmit)="signIn()">
+        <label>{{ copy('อีเมล', 'Email') }}<input type="email" [(ngModel)]="loginEmail" name="loginEmail" autocomplete="email" required></label>
+        <label>{{ copy('รหัสผ่าน', 'Password') }}<input type="password" [(ngModel)]="loginPassword" name="loginPassword" autocomplete="current-password"></label>
+        <div class="auth-actions">
+          <button class="btn confirm" [disabled]="loggingIn() || !loginPassword">{{ loggingIn() ? copy('กำลังดำเนินการ...', 'Working...') : copy('เข้าสู่ระบบ', 'Sign in') }}</button>
+          <button type="button" class="btn" [disabled]="loggingIn() || !loginEmail" (click)="sendMagicLink()">{{ copy('ส่งลิงก์เข้าอีเมล', 'Email me a sign-in link') }}</button>
+        </div>
+        @if (authMessage()) { <p class="auth-message" role="status">{{ authMessage() }}</p> }
+      </form>
+    </section>
+  }
+
   <section class="status-rail" aria-live="polite">
     <div class="sync-status"><span aria-hidden="true"></span>{{ syncMessage() }}</div>
-    <div class="notice"><b>!</b> {{ copy('ตรวจสอบราคากับ DoctorEase ก่อนยืนยันการเปลี่ยนแปลง', 'Check prices with DoctorEase before confirming changes') }}</div>
+    <div class="notice"><b>!</b> {{ copy('ราคาที่ยืนยันจะอัปเดต Supabase และเว็บไซต์ WordPress/ACF', 'Confirmed prices update Supabase and the WordPress/ACF website') }}</div>
   </section>
 
   @if (importMessage()) {
@@ -76,7 +99,7 @@
     <div class="action-bar">
       <div class="action-cluster primary-actions">
         <button class="btn price-check" [disabled]="doctorEaseChecking()" (click)="checkDoctorEasePrices()"><span aria-hidden="true">↻</span> {{ doctorEaseChecking() ? copy('กำลังตรวจสอบ...', 'Checking...') : copy('ตรวจราคา DoctorEase', 'Check DoctorEase prices') }}</button>
-        <button class="btn confirm" [disabled]="!changed().length" (click)="apply()"><span aria-hidden="true">✓</span> {{ copy('ยืนยันการปรับราคา', 'Confirm price changes') }} <b>{{ changed().length }}</b></button>
+        <button class="btn confirm" [disabled]="!changed().length || !auth.canManagePrices() || applyingPrices()" (click)="apply()"><span aria-hidden="true">✓</span> {{ applyingPrices() ? copy('กำลังซิงก์เว็บไซต์...', 'Syncing website...') : copy('ยืนยันการปรับราคา', 'Confirm price changes') }} <b>{{ changed().length }}</b></button>
       </div>
       <div class="action-cluster utility-actions">
         <input #excelInput class="file-input" type="file" accept=".xlsx,.xls" (change)="importExcel($event)">
