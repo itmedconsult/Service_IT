@@ -8,6 +8,56 @@ final class MCPS_Content_Model
 {
     public const POST_TYPE = 'service_product';
 
+    public function register_shortcodes(): void
+    {
+        add_shortcode('medconsult_price', array($this, 'render_price_shortcode'));
+    }
+
+    /** @param array<string,mixed> $attributes */
+    public function render_price_shortcode(array $attributes = array()): string
+    {
+        $attributes = shortcode_atts(array(
+            'code' => '',
+            'prefix' => '฿',
+            'decimals' => '0',
+            'unavailable' => 'Contact us',
+        ), $attributes, 'medconsult_price');
+
+        $code = sanitize_text_field((string) $attributes['code']);
+        if ($code === '') {
+            return '';
+        }
+
+        $ids = get_posts(array(
+            'post_type' => self::POST_TYPE,
+            'post_status' => 'publish',
+            'meta_key' => 'product_code',
+            'meta_value' => $code,
+            'fields' => 'ids',
+            'posts_per_page' => 1,
+            'no_found_rows' => true,
+        ));
+
+        if (!$ids) {
+            return esc_html((string) $attributes['unavailable']);
+        }
+
+        $price = function_exists('get_field')
+            ? get_field('current_price', (int) $ids[0])
+            : get_post_meta((int) $ids[0], 'current_price', true);
+        if ($price === '' || $price === null || !is_numeric($price)) {
+            return esc_html((string) $attributes['unavailable']);
+        }
+
+        $decimals = max(0, min(4, (int) $attributes['decimals']));
+        return sprintf(
+            '<span class="medconsult-live-price" data-product-code="%s">%s%s</span>',
+            esc_attr($code),
+            esc_html((string) $attributes['prefix']),
+            esc_html(number_format_i18n((float) $price, $decimals))
+        );
+    }
+
     public function register_post_type(): void
     {
         if (post_type_exists(self::POST_TYPE)) {

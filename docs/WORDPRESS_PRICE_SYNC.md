@@ -70,6 +70,20 @@ POST /wp-json/medconsult-price-sync/v1/bulk-prices
 
 The endpoint returns HTTP 207 if only part of a batch succeeds.
 
+## Displaying the live price in Elementor
+
+Add an Elementor **Shortcode** widget and use the product code that should appear on that page:
+
+```text
+[medconsult_price code="LH293"]
+```
+
+The shortcode reads the latest `current_price` ACF value at render time. Optional attributes are `prefix`, `decimals`, and `unavailable`, for example:
+
+```text
+[medconsult_price code="LH293" prefix="฿" decimals="2" unavailable="สอบถามราคา"]
+```
+
 ## Deployment
 
 ```sh

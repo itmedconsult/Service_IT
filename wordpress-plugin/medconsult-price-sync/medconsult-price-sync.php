@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MedConsult Price Sync
  * Description: Securely updates Supabase product prices and mirrors them to the Service Products ACF records.
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: MedConsult IT
  * Requires at least: 6.5
  * Requires PHP: 8.1
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MCPS_VERSION', '1.0.1');
+define('MCPS_VERSION', '1.0.2');
 define('MCPS_FILE', __FILE__);
 define('MCPS_DIR', plugin_dir_path(__FILE__));
 

@@ -3,7 +3,7 @@ Contributors: medconsult-it
 Tags: acf, supabase, prices, rest-api
 Requires at least: 6.5
 Requires PHP: 8.1
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 
 Securely updates Supabase product prices and mirrors the result to Service Products ACF records.
@@ -36,3 +36,11 @@ Body:
 {"items":[{"code":"LH293","price":1999}]}
 
 The plugin validates the access token with Supabase Auth and authorizes only roles stored in app_metadata.
+
+== Elementor / Shortcode ==
+
+Add an Elementor Shortcode widget and enter:
+
+[medconsult_price code="LH293"]
+
+Optional attributes: prefix, decimals, and unavailable. The value is read from the synced current_price ACF field on every page render.

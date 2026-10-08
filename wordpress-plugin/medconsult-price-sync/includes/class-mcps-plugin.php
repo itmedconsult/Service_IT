@@ -15,6 +15,7 @@ final class MCPS_Plugin
         $client = new MCPS_Supabase_Client(self::settings());
 
         add_action('init', array($content, 'register_post_type'), 5);
+        $content->register_shortcodes();
         add_action('acf/init', array($content, 'register_acf_fields'));
         add_action('rest_api_init', array(new MCPS_REST_Controller($client, $content, $audit), 'register_routes'));
         add_filter('rest_allowed_cors_headers', array(self::class, 'allow_idempotency_header'));
