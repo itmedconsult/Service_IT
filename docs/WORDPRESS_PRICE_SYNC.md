@@ -72,7 +72,7 @@ The endpoint returns HTTP 207 if only part of a batch succeeds.
 
 ## Website promotion prices
 
-The separate `/website-prices` page in the app lists numeric price cells from the TablePress tables embedded in the published WordPress `/promotion/` page (page ID 8080). It reads the actual TablePress table data, not the 2,550-product Supabase catalog. The plugin discovers table IDs from the published page HTML at request time, including tables inside the Aesthetic tabs, and uses the Elementor shortcodes only if the page request fails.
+The separate `/?view=website-prices` page in the app lists numeric price cells from the TablePress tables embedded in the published WordPress `/promotion/` page (page ID 8080). The query URL is used because the static host does not rewrite direct `/website-prices` requests to the app. It reads the actual TablePress table data, not the 2,550-product Supabase catalog. The plugin discovers table IDs from the published page HTML at request time, including tables inside the Aesthetic tabs, and uses the Elementor shortcodes only if the page request fails.
 
 `GET /wp-json/medconsult-price-sync/v1/promotion-prices` lists these prices. `POST` to the same route changes one numeric price cell using the same Supabase Admin bearer token as the existing price API. The request must include `table_id`, zero-based `row_index` and `column_index`, `expected_raw`, and `price`. A changed `expected_raw` returns HTTP 409 so an old app tab cannot overwrite a newer TablePress edit. The plugin saves the actual TablePress table, which invalidates its output cache. The app reloads the list to verify the saved value.
 

@@ -9,7 +9,7 @@
       </div>
     </div>
     <div class="preferences" [attr.aria-label]="copy('การตั้งค่าการแสดงผล', 'Display preferences')">
-      <a class="website-prices-link" href="/website-prices">{{ copy('ราคาหน้าโปรโมชัน ↗', 'Website promotion prices ↗') }}</a>
+      <a class="website-prices-link" href="/?view=website-prices">{{ copy('ราคาหน้าโปรโมชัน ↗', 'Website promotion prices ↗') }}</a>
       @if (auth.canManagePrices()) {
         <span class="admin-chip">{{ auth.email() }}</span>
         <button type="button" class="sign-out" (click)="signOut()">{{ copy('ออกจากระบบ', 'Sign out') }}</button>
