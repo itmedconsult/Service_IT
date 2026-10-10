@@ -10,6 +10,7 @@ final class MCPS_REST_Controller
     private MCPS_Supabase_Client $client;
     private MCPS_Content_Model $content;
     private MCPS_Audit_Log $audit;
+    private MCPS_Promotion_Prices $promotion;
     /** @var array<string,mixed>|null */
     private ?array $current_user = null;
     private string $current_token = '';
@@ -19,6 +20,7 @@ final class MCPS_REST_Controller
         $this->client = $client;
         $this->content = $content;
         $this->audit = $audit;
+        $this->promotion = new MCPS_Promotion_Prices();
     }
 
     public function register_routes(): void
@@ -39,6 +41,19 @@ final class MCPS_REST_Controller
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'bulk_update'),
             'permission_callback' => array($this, 'authorize'),
+        ));
+
+        register_rest_route(self::NAMESPACE, '/promotion-prices', array(
+            array(
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => array($this->promotion, 'list_prices'),
+                'permission_callback' => '__return_true',
+            ),
+            array(
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => array($this, 'update_promotion_price'),
+                'permission_callback' => array($this, 'authorize'),
+            ),
         ));
     }
 
@@ -130,6 +145,25 @@ final class MCPS_REST_Controller
         }
 
         return new WP_REST_Response(array('ok' => !$has_errors, 'results' => $results), $has_errors ? 207 : 200);
+    }
+
+    public function update_promotion_price(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $response = $this->promotion->update_price($request);
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        $result = $response->get_data();
+        $key = 'tablepress:' . $result['table_id'] . ':' . $result['row_index'] . ':' . $result['column_index'];
+        $this->audit->record(array(
+            'request_id' => $this->request_id($request, $key),
+            'product_code' => $key,
+            'old_price' => $result['old_price'],
+            'new_price' => $result['price'],
+            'supabase_user_id' => $this->current_user['id'] ?? '',
+            'supabase_email' => $this->current_user['email'] ?? '',
+        ));
+        return $response;
     }
 
     /** @param array<string,mixed> $changes */

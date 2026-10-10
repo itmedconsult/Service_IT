@@ -6,5 +6,9 @@ export const appRoutes: Routes = [
     pathMatch: 'full',
     loadComponent: () => import('./features/price-control/price-control-page.component').then((module) => module.PriceControlPageComponent),
   },
+  {
+    path: 'website-prices',
+    loadComponent: () => import('./features/promotion-prices/promotion-prices-page.component').then((module) => module.PromotionPricesPageComponent),
+  },
   { path: '**', redirectTo: '' },
 ];
