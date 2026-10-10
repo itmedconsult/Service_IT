@@ -2,26 +2,32 @@
   <header class="header">
     <div>
       <p class="eyebrow">MedConsult · Website prices</p>
-      <h1>ราคาโปรโมชันบนเว็บไซต์จริง</h1>
-      <p>รายการด้านล่างอ่านจากตารางที่เผยแพร่บน <a [href]="pageUrl()" target="_blank" rel="noopener">medconsultasia.com/promotion/ ↗</a></p>
+      <h1>{{ copy('ราคาโปรโมชันบนเว็บไซต์จริง', 'Live website promotion prices') }}</h1>
+      <p>{{ copy('รายการด้านล่างอ่านจากตารางที่เผยแพร่บน', 'The prices below come from tables published on') }} <a [href]="pageUrl()" target="_blank" rel="noopener">medconsultasia.com/promotion/ ↗</a></p>
     </div>
-    <a class="back" routerLink="/">← ระบบราคาสินค้าทั้งหมด</a>
+    <div class="header-actions">
+      <div class="language-switch" role="group" [attr.aria-label]="copy('เลือกภาษา', 'Choose language')">
+        <button type="button" [class.active]="language() === 'th'" [attr.aria-pressed]="language() === 'th'" (click)="setLanguage('th')">ไทย</button>
+        <button type="button" [class.active]="language() === 'en'" [attr.aria-pressed]="language() === 'en'" (click)="setLanguage('en')">EN</button>
+      </div>
+      <a class="back" routerLink="/">{{ copy('← ระบบราคาสินค้าทั้งหมด', '← All product prices') }}</a>
+    </div>
   </header>
 
   <section class="summary">
-    <div><strong>{{ items().length }}</strong><span>ช่องราคาบนหน้าโปรโมชัน</span></div>
-    <div><strong>{{ tables().length }}</strong><span>ตารางที่เผยแพร่</span></div>
-    <div class="summary-note">บันทึกเข้าตาราง TablePress ของ WordPress โดยตรง เมื่อแก้แล้วให้เปิดหน้าเว็บจริงตรวจอีกครั้ง</div>
+    <div><strong>{{ items().length }}</strong><span>{{ copy('ช่องราคาบนหน้าโปรโมชัน', 'Promotion price cells') }}</span></div>
+    <div><strong>{{ tables().length }}</strong><span>{{ copy('ตารางที่เผยแพร่', 'Published tables') }}</span></div>
+    <div class="summary-note">{{ copy('บันทึกเข้าตาราง TablePress ของ WordPress โดยตรง เมื่อแก้แล้วให้เปิดหน้าเว็บจริงตรวจอีกครั้ง', 'Changes are saved directly to WordPress TablePress. Check the live website after saving.') }}</div>
   </section>
 
   @if (!auth.canManagePrices()) {
     <section class="login">
-      <div><h2>เข้าสู่ระบบ Admin เพื่อแก้ราคา</h2><p>ใช้บัญชี Supabase Auth เดียวกับแอปราคาหลัก</p></div>
+      <div><h2>{{ copy('เข้าสู่ระบบ Admin เพื่อแก้ราคา', 'Admin sign-in required to edit prices') }}</h2><p>{{ copy('ใช้บัญชี Supabase Auth เดียวกับแอปราคาหลัก', 'Use the same Supabase Auth account as the main price app') }}</p></div>
       <form (ngSubmit)="signIn()">
-        <label>อีเมล<input type="email" [(ngModel)]="loginEmail" name="email" required autocomplete="email"></label>
-        <label>รหัสผ่าน<input type="password" [(ngModel)]="loginPassword" name="password" autocomplete="current-password"></label>
-        <button type="submit" [disabled]="!loginEmail || !loginPassword">เข้าสู่ระบบ</button>
-        <button type="button" class="secondary" [disabled]="!loginEmail" (click)="sendMagicLink()">ส่งลิงก์เข้าอีเมล</button>
+        <label>{{ copy('อีเมล', 'Email') }}<input type="email" [(ngModel)]="loginEmail" name="email" required autocomplete="email"></label>
+        <label>{{ copy('รหัสผ่าน', 'Password') }}<input type="password" [(ngModel)]="loginPassword" name="password" autocomplete="current-password"></label>
+        <button type="submit" [disabled]="!loginEmail || !loginPassword">{{ copy('เข้าสู่ระบบ', 'Sign in') }}</button>
+        <button type="button" class="secondary" [disabled]="!loginEmail" (click)="sendMagicLink()">{{ copy('ส่งลิงก์เข้าอีเมล', 'Email me a sign-in link') }}</button>
       </form>
     </section>
   } @else { <p class="signed-in">Admin: {{ auth.email() }}</p> }
@@ -31,20 +37,20 @@
 
   <section class="catalog">
     <div class="controls">
-      <div><h2>ราคาบนหน้าโปรโมชัน</h2><p>แสดงเฉพาะช่องที่เป็นราคาในตารางที่อยู่บนหน้าเว็บจริง</p></div>
-      <label>ค้นหาชื่อรายการ<input type="search" [ngModel]="query()" (ngModelChange)="query.set($event)" placeholder="เช่น Mounjaro, HIV, Botox"></label>
-      <label>ตาราง<select [ngModel]="table()" (ngModelChange)="table.set($event)"><option value="all">ทุกตาราง</option>@for (entry of tables(); track entry[0]) { <option [value]="entry[0]">{{ entry[1] }}</option> }</select></label>
-      <button class="secondary" (click)="reload()" [disabled]="loading()">{{ loading() ? 'กำลังโหลด...' : '↻ โหลดใหม่' }}</button>
+      <div><h2>{{ copy('ราคาบนหน้าโปรโมชัน', 'Promotion page prices') }}</h2><p>{{ copy('แสดงเฉพาะช่องที่เป็นราคาในตารางที่อยู่บนหน้าเว็บจริง', 'Only price cells in tables on the live website are shown') }}</p></div>
+      <label>{{ copy('ค้นหาชื่อรายการ', 'Search items') }}<input type="search" [ngModel]="query()" (ngModelChange)="query.set($event)" [placeholder]="copy('เช่น Mounjaro, HIV, Botox', 'e.g. Mounjaro, HIV, Botox')"></label>
+      <label>{{ copy('ตาราง', 'Table') }}<select [ngModel]="table()" (ngModelChange)="table.set($event)"><option value="all">{{ copy('ทุกตาราง', 'All tables') }}</option>@for (entry of tables(); track entry[0]) { <option [value]="entry[0]">{{ entry[1] }}</option> }</select></label>
+      <button class="secondary" (click)="reload()" [disabled]="loading()">{{ loading() ? copy('กำลังโหลด...', 'Loading...') : copy('↻ โหลดใหม่', '↻ Reload') }}</button>
     </div>
     <div class="table-wrap"><table>
-      <thead><tr><th>ตาราง</th><th>รายการบนเว็บไซต์</th><th>ราคาที่แสดง</th><th>จัดการ</th></tr></thead>
+      <thead><tr><th>{{ copy('ตาราง', 'Table') }}</th><th>{{ copy('รายการบนเว็บไซต์', 'Website item') }}</th><th>{{ copy('ราคาที่แสดง', 'Displayed price') }}</th><th>{{ copy('จัดการ', 'Action') }}</th></tr></thead>
       <tbody>
         @for (item of visible(); track item.table_id + '-' + item.row_index + '-' + item.column_index) {
-          <tr><td><span class="table-name">{{ item.table_name }}</span></td><td>{{ item.label }}</td><td class="price">{{ item.raw }}</td><td><button (click)="startEdit(item)" [disabled]="!auth.canManagePrices()">แก้ราคา</button></td></tr>
-        } @empty { <tr><td colspan="4" class="empty">{{ loading() ? 'กำลังโหลดรายการ...' : 'ไม่พบรายการที่ตรงกับคำค้น' }}</td></tr> }
+          <tr><td><span class="table-name">{{ item.table_name }}</span></td><td>{{ item.label }}</td><td class="price">{{ item.raw }}</td><td><button (click)="startEdit(item)" [disabled]="!auth.canManagePrices()">{{ copy('แก้ราคา', 'Edit price') }}</button></td></tr>
+        } @empty { <tr><td colspan="4" class="empty">{{ loading() ? copy('กำลังโหลดรายการ...', 'Loading items...') : copy('ไม่พบรายการที่ตรงกับคำค้น', 'No matching items found') }}</td></tr> }
       </tbody>
     </table></div>
-    <p class="footer-note">{{ visible().length }} รายการ · ข้อมูลจาก WordPress TablePress · ช่องที่มีสูตรหรือข้อความพิเศษจะไม่แสดงเพื่อป้องกันการแก้ผิด</p>
+    <p class="footer-note">{{ visible().length }} {{ copy('รายการ', 'items') }} · {{ copy('ข้อมูลจาก WordPress TablePress · ช่องที่มีสูตรหรือข้อความพิเศษจะไม่แสดงเพื่อป้องกันการแก้ผิด', 'From WordPress TablePress · Formula and special-text cells are excluded to prevent accidental edits') }}</p>
   </section>
 
   @if (editing(); as item) {
@@ -52,9 +58,9 @@
       <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="edit-title" (click)="$event.stopPropagation()">
         <p class="eyebrow">{{ item.table_name }}</p>
         <h2 id="edit-title">{{ item.label }}</h2>
-        <p>ราคาปัจจุบันบนเว็บ: <strong>{{ item.raw }}</strong></p>
-        <label>ราคาใหม่ (บาท)<input type="number" min="0" max="10000000" step="0.01" [(ngModel)]="draftPrice" autofocus></label>
-        <div class="dialog-actions"><button class="secondary" type="button" (click)="editing.set(null)" [disabled]="saving()">ยกเลิก</button><button type="button" (click)="save()" [disabled]="saving() || draftPrice === null || draftPrice === item.price">{{ saving() ? 'กำลังบันทึก...' : 'บันทึกบนเว็บไซต์' }}</button></div>
+        <p>{{ copy('ราคาปัจจุบันบนเว็บ:', 'Current website price:') }} <strong>{{ item.raw }}</strong></p>
+        <label>{{ copy('ราคาใหม่ (บาท)', 'New price (THB)') }}<input type="number" min="0" max="10000000" step="0.01" [(ngModel)]="draftPrice" autofocus></label>
+        <div class="dialog-actions"><button class="secondary" type="button" (click)="editing.set(null)" [disabled]="saving()">{{ copy('ยกเลิก', 'Cancel') }}</button><button type="button" (click)="save()" [disabled]="saving() || draftPrice === null || draftPrice === item.price">{{ saving() ? copy('กำลังบันทึก...', 'Saving...') : copy('บันทึกบนเว็บไซต์', 'Save to website') }}</button></div>
       </section>
     </div>
   }
